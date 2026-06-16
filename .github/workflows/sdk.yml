@@ -1,0 +1,45 @@
+name: SDK
+
+on:
+  push:
+    tags:
+      - 'sdk-v*'
+    branches: [main, master]
+    paths:
+      - 'base-sdk/**'
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'base-sdk/**'
+
+jobs:
+  check:
+    name: Check base-sdk
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+        working-directory: base-sdk
+      - run: bun run typecheck
+        working-directory: base-sdk
+      - run: bun run build
+        working-directory: base-sdk
+
+  publish:
+    name: Publish
+    needs: check
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/sdk-v')
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - name: Build & publish base-sdk
+        working-directory: base-sdk
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          bun install --frozen-lockfile
+          bun run build
+          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
+          bun publish --access public
