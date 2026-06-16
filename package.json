@@ -1,18 +1,17 @@
 {
   "name": "@usemarmo/core",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "Marmo core co-signer. Holds shard B and co-signs approved transactions across supported chains.",
+  "description": "Marmo co-signer. Holds shard B and co-signs ERC-4337 UserOperations on Base.",
   "scripts": {
-    "spine": "bun run spine.ts",
     "dev": "bun --watch src/server.ts",
     "start": "bun src/server.ts",
     "build:binary": "bun build --compile ./src/server.ts --outfile dist/marmo-core"
   },
   "dependencies": {
-    "@mysten/sui": "^1.45.0",
     "hono": "^4.6.0",
-    "postgres": "^3.4.5"
+    "postgres": "^3.4.5",
+    "viem": "^2.21.0"
   }
 }
