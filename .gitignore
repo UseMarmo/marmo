@@ -1,0 +1,18 @@
+node_modules/
+dist/
+build/
+*.log
+.DS_Store
+
+# Secrets and local runtime state. NEVER commit.
+.env
+.env.local
+data/
+keys.json
+
+# Rust / Tauri build output
+desktop/src-tauri/target/
+desktop/src-tauri/gen/
+
+# Bun
+.bun/
