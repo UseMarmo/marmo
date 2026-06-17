@@ -12,9 +12,6 @@ export interface WalletRecord {
   apiKeyHash: string;
   shardAAddress: string;
   shardCAddress: string;
-  dailyLimitUsd: number;
-  spentTodayUsd: number;
-  spentDate: string;
   createdAt: string;
 }
 
@@ -45,23 +42,17 @@ export async function getShard(shardId: string): Promise<ShardRecord | undefined
 export async function putWallet(record: WalletRecord): Promise<void> {
   await sql`
     insert into marmo_wallets
-      (address, shard_id, api_key_hash, shard_a_address, shard_c_address,
-       daily_limit_usd, spent_today_usd, spent_date)
+      (address, shard_id, api_key_hash, shard_a_address, shard_c_address)
     values
       (${record.address}, ${record.shardId}, ${record.apiKeyHash},
-       ${record.shardAAddress}, ${record.shardCAddress},
-       ${record.dailyLimitUsd}, ${record.spentTodayUsd}, ${record.spentDate})
+       ${record.shardAAddress}, ${record.shardCAddress})
     on conflict (address) do update
-      set api_key_hash    = excluded.api_key_hash,
-          daily_limit_usd = excluded.daily_limit_usd,
-          spent_today_usd = excluded.spent_today_usd,
-          spent_date      = excluded.spent_date`;
+      set api_key_hash = excluded.api_key_hash`;
 }
 
 export async function getWallet(address: string): Promise<WalletRecord | undefined> {
   const rows = await sql`
-    select address, shard_id, api_key_hash, shard_a_address, shard_c_address,
-           daily_limit_usd, spent_today_usd, spent_date, created_at
+    select address, shard_id, api_key_hash, shard_a_address, shard_c_address, created_at
     from marmo_wallets where address = ${address}`;
   const row = rows[0];
   if (!row) return undefined;
@@ -71,9 +62,6 @@ export async function getWallet(address: string): Promise<WalletRecord | undefin
     apiKeyHash: row.api_key_hash,
     shardAAddress: row.shard_a_address,
     shardCAddress: row.shard_c_address,
-    dailyLimitUsd: Number(row.daily_limit_usd),
-    spentTodayUsd: Number(row.spent_today_usd),
-    spentDate: row.spent_date,
     createdAt: row.created_at,
   };
 }

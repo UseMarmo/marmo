@@ -114,7 +114,7 @@ export async function buildStealthSend(
 
 export interface QuoteResult {
   amountOut: string;
-  feeTier: number;
+  fee: number;
 }
 
 export async function getQuote(
@@ -126,5 +126,29 @@ export async function getQuote(
   const res = await coreFetch(`/v1/quote?${params.toString()}`);
   const data = (await res.json().catch(() => ({}))) as QuoteResult & { error?: string };
   if (!res.ok) throw new Error(data.error ?? "Quote failed");
+  return data;
+}
+
+export interface SwapCalldata {
+  callData: `0x${string}`;
+  value: string;
+  amountOut: string;
+}
+
+export async function buildSwap(
+  address: string,
+  apiKey: string,
+  tokenIn: string,
+  tokenOut: string,
+  amountIn: string,
+  slippageBps = 50,
+): Promise<SwapCalldata> {
+  const res = await coreFetch(`/v1/wallets/${address}/tx/swap`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({ tokenIn, tokenOut, amountIn, slippageBps }),
+  });
+  const data = (await res.json().catch(() => ({}))) as SwapCalldata & { error?: string };
+  if (!res.ok) throw new Error(data.error ?? "Failed to build swap");
   return data;
 }

@@ -23,10 +23,6 @@ function hashKey(key: string): string {
   return createHash("sha256").update(key).digest("hex");
 }
 
-function today(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
 const _rateBuckets = new Map<string, number[]>();
 function checkRateLimit(key: string, maxPerMinute = 20): boolean {
   const now = Date.now();
@@ -78,9 +74,6 @@ app.post("/v1/wallets", async (c) => {
     apiKeyHash: hashKey(apiKey),
     shardAAddress: (body.shardAAddress as string).toLowerCase(),
     shardCAddress: (body.shardCAddress as string).toLowerCase(),
-    dailyLimitUsd: Number(body.dailyLimitUsd ?? 1000),
-    spentTodayUsd: 0,
-    spentDate: today(),
     createdAt: new Date().toISOString(),
   });
 
@@ -98,7 +91,6 @@ app.get("/v1/wallets/:address", async (c) => {
     shardBAddress: shard?.address,
     shardAAddress: wallet.shardAAddress,
     shardCAddress: wallet.shardCAddress,
-    dailyLimitUsd: wallet.dailyLimitUsd,
   });
 });
 
@@ -120,11 +112,6 @@ app.post("/v1/wallets/:address/cosign", async (c) => {
   const body = await c.req.json().catch(() => null);
   if (!body?.userOpHash || !/^0x[0-9a-fA-F]{64}$/.test(body.userOpHash)) {
     return c.json({ error: "userOpHash (0x-prefixed 32-byte hex) required" }, 400);
-  }
-
-  const amountUsd = Number(body.amountUsd ?? 0);
-  if (!(await enforceDailyLimit(wallet, amountUsd))) {
-    return c.json({ error: "daily spending limit exceeded" }, 403);
   }
 
   const record = await getShard(wallet.shardId);
@@ -349,14 +336,6 @@ app.get("/v1/wallets/:address/stealth/announcements", async (c) => {
     return c.json({ error: (e as Error).message }, 500);
   }
 });
-
-async function enforceDailyLimit(wallet: WalletRecord, amountUsd: number): Promise<boolean> {
-  const now = today();
-  const spent = wallet.spentDate === now ? wallet.spentTodayUsd : 0;
-  if (spent + amountUsd > wallet.dailyLimitUsd) return false;
-  await putWallet({ ...wallet, spentDate: now, spentTodayUsd: spent + amountUsd });
-  return true;
-}
 
 Bun.serve({ port: PORT, fetch: app.fetch });
 console.log(`marmo-core v0.4.0 listening on :${PORT} (${NETWORK})`);

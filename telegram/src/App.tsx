@@ -19,7 +19,7 @@ import {
 } from "./wallet.js";
 import * as core from "./core.js";
 
-type Screen = "loading" | "welcome" | "dashboard" | "send" | "receive";
+type Screen = "loading" | "welcome" | "dashboard" | "send" | "receive" | "swap";
 
 const SCRAMBLE = "0123456789";
 
@@ -134,6 +134,7 @@ export default function App() {
         balance={balance}
         onSend={() => navigate("send")}
         onReceive={() => navigate("receive")}
+        onSwap={() => navigate("swap")}
       />
     );
   }
@@ -144,6 +145,10 @@ export default function App() {
 
   if (screen === "receive" && vault) {
     return <ReceiveScreen vault={vault} onBack={() => navigate("dashboard")} />;
+  }
+
+  if (screen === "swap" && vault) {
+    return <SwapScreen vault={vault} onBack={() => navigate("dashboard")} />;
   }
 
   return null;
@@ -289,11 +294,13 @@ function DashboardScreen({
   balance,
   onSend,
   onReceive,
+  onSwap,
 }: {
   vault: Vault;
   balance: BalanceResult | null;
   onSend: () => void;
   onReceive: () => void;
+  onSwap: () => void;
 }) {
   const [copied, setCopied] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
@@ -348,6 +355,7 @@ function DashboardScreen({
 
       <div className="actions">
         <button className="btn btn--ghost" onClick={onReceive}>Receive</button>
+        <button className="btn btn--ghost" onClick={onSwap}>Swap</button>
         <button className="btn btn--primary" onClick={onSend}>Send</button>
       </div>
     </div>
@@ -810,6 +818,165 @@ function SendScreen({ vault, balance, onBack }: { vault: Vault; balance: Balance
 
       <button className="btn btn--primary" onClick={goPreview} disabled={!parsed || !to}>
         Preview
+      </button>
+    </div>
+  );
+}
+
+const SWAP_TOKENS = [
+  { address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", symbol: "USDC", decimals: 6 },
+  { address: "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2", symbol: "USDT", decimals: 6 },
+  { address: "0x4200000000000000000000000000000000000006", symbol: "WETH", decimals: 18 },
+  { address: "0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb", symbol: "DAI", decimals: 18 },
+  { address: "0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA", symbol: "USDbC", decimals: 6 },
+];
+
+function SwapScreen({ vault, onBack }: { vault: Vault; onBack: () => void }) {
+  const [tokenIn, setTokenIn] = useState(SWAP_TOKENS[0].address);
+  const [tokenOut, setTokenOut] = useState(SWAP_TOKENS[2].address);
+  const [amountRaw, setAmountRaw] = useState("");
+  const [quote, setQuote] = useState<{ amountOut: string; fee: number } | null>(null);
+  const [quoting, setQuoting] = useState(false);
+  const [step, setStep] = useState<"input" | "result">("input");
+  const [loading, setLoading] = useState(false);
+  const [txResult, setTxResult] = useState<TxResult | null>(null);
+  const amountRef = useRef<HTMLInputElement>(null);
+
+  const inToken = SWAP_TOKENS.find(t => t.address === tokenIn)!;
+  const outToken = SWAP_TOKENS.find(t => t.address === tokenOut)!;
+  const parsed = parseFloat(amountRaw) || 0;
+  const amountIn = parsed > 0
+    ? BigInt(Math.round(parsed * 10 ** inToken.decimals)).toString()
+    : "0";
+
+  useEffect(() => {
+    setQuote(null);
+    if (!parsed || tokenIn === tokenOut) return;
+    setQuoting(true);
+    const t = setTimeout(async () => {
+      try {
+        const q = await core.getQuote(tokenIn, tokenOut, amountIn);
+        setQuote(q);
+      } catch {
+        setQuote(null);
+      } finally {
+        setQuoting(false);
+      }
+    }, 600);
+    return () => clearTimeout(t);
+  }, [amountRaw, tokenIn, tokenOut]);
+
+  function flip() {
+    setTokenIn(tokenOut);
+    setTokenOut(tokenIn);
+    setAmountRaw("");
+    setQuote(null);
+  }
+
+  async function submit() {
+    setLoading(true);
+    try {
+      const cosignKey = privateKeyToAddress(vault.shardAPrivKey);
+      const cd = await core.buildSwap(cosignKey, vault.apiKey, tokenIn, tokenOut, amountIn);
+      const hash = await buildAndSubmit(vault, cd.callData, BigInt(cd.value));
+      haptic("success");
+      setTxResult({ ok: true, hash });
+    } catch (e) {
+      haptic("error");
+      setTxResult({ ok: false, message: errMsg(e) });
+    } finally {
+      setLoading(false);
+      setStep("result");
+    }
+  }
+
+  const outAmount = quote
+    ? (Number(BigInt(quote.amountOut)) / 10 ** outToken.decimals).toFixed(outToken.decimals === 6 ? 4 : 6).replace(/\.?0+$/, "")
+    : "";
+
+  if (step === "result" && txResult) {
+    const short = txResult.ok ? `${txResult.hash.slice(0, 10)}…${txResult.hash.slice(-8)}` : "";
+    return (
+      <div className="screen send-screen tx-result">
+        <img src={txResult.ok ? "/icons8-success-96.png" : "/icons8-fail-96.png"} className="tx-result__icon" alt="" />
+        <h2 className="tx-result__title">{txResult.ok ? "Swapped!" : "Swap Failed"}</h2>
+        {txResult.ok ? (
+          <>
+            <div className="tx-result__hash-row">
+              <span className="tx-result__hash">{short}</span>
+              <button className="tx-result__copy" onClick={() => navigator.clipboard.writeText(txResult.hash)} aria-label="Copy">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              </button>
+            </div>
+            <a className="btn btn--primary tx-result__basescan" href={`https://basescan.org/tx/${txResult.hash}`} target="_blank" rel="noopener">Open in Basescan ↗</a>
+          </>
+        ) : (
+          <>
+            <p className="tx-result__err">{txResult.message}</p>
+            <button className="btn btn--primary" onClick={submit} disabled={loading}>{loading ? "Retrying…" : "Try Again"}</button>
+          </>
+        )}
+        <button className="btn btn--ghost" onClick={onBack}>Close</button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="screen send-screen">
+      <button className="back" onClick={onBack}>← Back</button>
+      <h2 className="title title--sm">Swap</h2>
+
+      <div className="swap-panel">
+        <div className="swap-side">
+          <span className="swap-side__label">You pay</span>
+          <select className="swap-token-select" value={tokenIn} onChange={e => { setTokenIn(e.target.value); setAmountRaw(""); setQuote(null); }}>
+            {SWAP_TOKENS.filter(t => t.address !== tokenOut).map(t => (
+              <option key={t.address} value={t.address}>{t.symbol}</option>
+            ))}
+          </select>
+          <input
+            ref={amountRef}
+            className="swap-amount-input"
+            type="text"
+            inputMode="decimal"
+            placeholder="0"
+            value={amountRaw}
+            onChange={e => setAmountRaw(e.target.value.replace(/[^0-9.]/g, "").replace(/(\..*?)\./g, "$1"))}
+          />
+        </div>
+
+        <button className="swap-flip-btn" onClick={flip} aria-label="Flip tokens">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M7 16V4m0 0L3 8m4-4l4 4"/><path d="M17 8v12m0 0l4-4m-4 4l-4-4"/>
+          </svg>
+        </button>
+
+        <div className="swap-side">
+          <span className="swap-side__label">You receive</span>
+          <select className="swap-token-select" value={tokenOut} onChange={e => { setTokenOut(e.target.value); setQuote(null); }}>
+            {SWAP_TOKENS.filter(t => t.address !== tokenIn).map(t => (
+              <option key={t.address} value={t.address}>{t.symbol}</option>
+            ))}
+          </select>
+          <div className="swap-amount-out">
+            {quoting ? <span className="swap-amount-out__loading">…</span> : (outAmount || <span className="swap-amount-out__empty">—</span>)}
+          </div>
+        </div>
+      </div>
+
+      {quote && (
+        <div className="swap-meta">
+          <span>Fee tier: {quote.fee / 10000}%</span>
+          <span>1 {inToken.symbol} ≈ {(Number(BigInt(quote.amountOut)) / 10 ** outToken.decimals / parsed).toFixed(4)} {outToken.symbol}</span>
+        </div>
+      )}
+
+      <button
+        className="btn btn--primary"
+        onClick={submit}
+        disabled={loading || !quote || parsed <= 0}
+      >
+        {loading ? "Swapping…" : "Swap"}
       </button>
     </div>
   );
