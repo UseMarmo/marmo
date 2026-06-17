@@ -668,9 +668,9 @@ button, input, select, textarea { font-family: inherit; }
 .stealth-payment__eth { font-size: 0.95rem; font-weight: 600; }
 .stealth-payment__addr { font-size: 0.72rem; color: var(--ink-muted); font-family: monospace; }
 .stealth-payment__sweep { padding: 0.35rem 0.9rem; font-size: 0.8rem; height: auto; flex-shrink: 0; }
+.stealth-payment__txs { display: flex; flex-direction: column; gap: 0.2rem; margin-top: 0.5rem; }
 .stealth-payment__tx {
   display: block;
-  margin-top: 0.5rem;
   font-size: 0.75rem;
   color: var(--blue-2);
   text-decoration: underline dotted;

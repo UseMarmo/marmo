@@ -394,8 +394,15 @@ function ReceiveScreen({ vault, onBack }: { vault: Vault; onBack: () => void }) 
   const [payments, setPayments] = useState<StealthPayment[] | null>(null);
   const [scanErr, setScanErr] = useState("");
   const [sweeping, setSweeping] = useState<string | null>(null);
-  const [sweepResult, setSweepResult] = useState<Record<string, { ok: boolean; hash?: string; err?: string }>>({});
+  const [sweepResult, setSweepResult] = useState<Record<string, { ok: boolean; hashes?: string[]; err?: string }>>({});
   const [registered, setRegistered] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const t = setInterval(() => setCooldown(c => (c <= 1 ? 0 : c - 1)), 1000);
+    return () => clearInterval(t);
+  }, [cooldown > 0]);
 
   const meta = getStealthMetaAddress(vault);
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(vault.address)}&color=e9f0f8&bgcolor=141b24&margin=10&qzone=1`;
@@ -411,6 +418,7 @@ function ReceiveScreen({ vault, onBack }: { vault: Vault; onBack: () => void }) 
   }
 
   async function scan() {
+    if (scanning || cooldown > 0) return;
     setScanning(true);
     setScanErr("");
     setPayments(null);
@@ -425,15 +433,16 @@ function ReceiveScreen({ vault, onBack }: { vault: Vault; onBack: () => void }) 
       setScanErr(errMsg(e));
     } finally {
       setScanning(false);
+      setCooldown(30);
     }
   }
 
   async function sweep(p: StealthPayment) {
     setSweeping(p.stealthAddress);
     try {
-      const hash = await sweepStealthPayment(p.stealthPrivKey, p.stealthAddress, vault.address);
+      const hashes = await sweepStealthPayment(vault, p);
       haptic("success");
-      setSweepResult(r => ({ ...r, [p.stealthAddress]: { ok: true, hash } }));
+      setSweepResult(r => ({ ...r, [p.stealthAddress]: { ok: true, hashes } }));
     } catch (e) {
       haptic("error");
       setSweepResult(r => ({ ...r, [p.stealthAddress]: { ok: false, err: errMsg(e) } }));
@@ -496,9 +505,10 @@ function ReceiveScreen({ vault, onBack }: { vault: Vault; onBack: () => void }) 
 
           <div className="stealth-scan-section">
             <span className="stealth-scan-section__title">Incoming private payments</span>
-            <button className="btn btn--ghost" onClick={scan} disabled={scanning} style={{ width: "100%" }}>
+            <button className="btn btn--ghost" onClick={scan} disabled={scanning || cooldown > 0} style={{ width: "100%" }}>
               {scanning
                 ? <><svg className="swap-fetching__spinner" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{marginRight:"0.35rem"}}><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>Scanning…</>
+                : cooldown > 0 ? `Scan again in ${cooldown}s`
                 : "Scan for payments"}
             </button>
 
@@ -516,7 +526,12 @@ function ReceiveScreen({ vault, onBack }: { vault: Vault; onBack: () => void }) 
                     <div key={p.stealthAddress} className="stealth-payment">
                       <div className="stealth-payment__row">
                         <div className="stealth-payment__info">
-                          <span className="stealth-payment__eth">{p.ethBalance} ETH</span>
+                          {p.ethRaw > 0n && <span className="stealth-payment__eth">{p.ethBalance} ETH</span>}
+                          {p.tokens.map(t => (
+                            <span key={t.address} className="stealth-payment__eth">
+                              {parseFloat(t.balance).toFixed(t.decimals <= 6 ? 2 : 5).replace(/\.?0+$/, "")} {t.symbol}
+                            </span>
+                          ))}
                           <span className="stealth-payment__addr">{shortAddress(p.stealthAddress)}</span>
                         </div>
                         {!result && (
@@ -525,14 +540,18 @@ function ReceiveScreen({ vault, onBack }: { vault: Vault; onBack: () => void }) 
                             onClick={() => sweep(p)}
                             disabled={sweeping === p.stealthAddress}
                           >
-                            {sweeping === p.stealthAddress ? "Sweeping…" : "Sweep"}
+                            {sweeping === p.stealthAddress ? "Sweeping…" : "Sweep all"}
                           </button>
                         )}
                       </div>
-                      {result?.ok && (
-                        <a className="stealth-payment__tx" href={`https://basescan.org/tx/${result.hash}`} target="_blank" rel="noopener">
-                          Swept. View on Basescan ↗
-                        </a>
+                      {result?.ok && result.hashes && (
+                        <div className="stealth-payment__txs">
+                          {result.hashes.map((h, i) => (
+                            <a key={h} className="stealth-payment__tx" href={`https://basescan.org/tx/${h}`} target="_blank" rel="noopener">
+                              Tx {i + 1} swept. View on Basescan ↗
+                            </a>
+                          ))}
+                        </div>
                       )}
                       {result && !result.ok && <p className="err" style={{marginTop:"0.4rem"}}>{result.err}</p>}
                     </div>

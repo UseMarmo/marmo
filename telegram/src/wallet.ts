@@ -138,6 +138,14 @@ export function getStealthMetaAddress(vault: Vault): string {
   return `0x${spend}${view}`;
 }
 
+export interface StealthToken {
+  address: `0x${string}`;
+  symbol: string;
+  decimals: number;
+  balance: string;
+  raw: bigint;
+}
+
 export interface StealthPayment {
   stealthAddress: string;
   ephemeralPubKey: string;
@@ -146,6 +154,8 @@ export interface StealthPayment {
   txHash: string;
   stealthPrivKey: `0x${string}`;
   ethBalance: string;
+  ethRaw: bigint;
+  tokens: StealthToken[];
 }
 
 function numberToBytes32(n: bigint): Uint8Array {
@@ -191,39 +201,84 @@ export async function scanStealthPayments(vault: Vault): Promise<StealthPayment[
     const result = checkAnnouncement(ann, vault.viewPrivKey, vault.spendPrivKey);
     if (!result.matches || !result.stealthPrivKey) continue;
 
-    const ethRaw = await publicClient.getBalance({ address: ann.stealthAddress as `0x${string}` }).catch(() => 0n);
-    if (ethRaw === 0n) continue;
+    const addr = ann.stealthAddress as `0x${string}`;
+
+    const [ethRaw, ...tokenRaws] = await Promise.all([
+      publicClient.getBalance({ address: addr }).catch(() => 0n),
+      ...BASE_TOKENS.map(t =>
+        (publicClient.readContract({ address: t.address, abi: ERC20_ABI, functionName: "balanceOf", args: [addr] }) as Promise<bigint>)
+          .catch(() => 0n),
+      ),
+    ]);
+
+    const tokens: StealthToken[] = BASE_TOKENS
+      .map((t, i) => ({ ...t, raw: tokenRaws[i], balance: formatUnits(tokenRaws[i], t.decimals) }))
+      .filter(t => t.raw > 0n)
+      .map(({ address, symbol, decimals, balance, raw }) => ({ address, symbol, decimals, balance, raw }));
+
+    if (ethRaw === 0n && tokens.length === 0) continue;
 
     matched.push({
       ...ann,
       stealthPrivKey: result.stealthPrivKey,
       ethBalance: parseFloat(formatEther(ethRaw)).toFixed(6).replace(/\.?0+$/, ""),
+      ethRaw,
+      tokens,
     });
   }
   return matched;
 }
 
 export async function sweepStealthPayment(
-  stealthPrivKey: `0x${string}`,
-  stealthAddress: string,
-  toAddress: string,
-): Promise<string> {
+  vault: Vault,
+  payment: StealthPayment,
+): Promise<string[]> {
+  const { stealthPrivKey, stealthAddress, tokens } = payment;
+  const toAddress = vault.address as `0x${string}`;
+  const stealthAddr = stealthAddress as `0x${string}`;
+
   const account = privateKeyToAccount(stealthPrivKey);
   const walletClient = createWalletClient({ account, chain: base, transport: http() });
 
-  const ethRaw = await publicClient.getBalance({ address: stealthAddress as `0x${string}` });
   const gasPrice = await publicClient.getGasPrice();
-  const gasLimit = 21_000n;
-  const gasCost = gasPrice * gasLimit;
+  const GAS_TOKEN = 65_000n;
+  const GAS_ETH   = 21_000n;
+  const totalGas  = (BigInt(tokens.length) * GAS_TOKEN + GAS_ETH) * gasPrice * 2n;
 
-  if (ethRaw <= gasCost) throw new Error("Insufficient ETH to cover gas for sweep");
+  const ethNow = await publicClient.getBalance({ address: stealthAddr });
 
-  const hash = await walletClient.sendTransaction({
-    to: toAddress as `0x${string}`,
-    value: ethRaw - gasCost,
-    gas: gasLimit,
-  });
-  return hash;
+  if (ethNow < totalGas) {
+    const deficit = totalGas - ethNow;
+    const cd = await core.buildSend(vault.address, vault.apiKey, stealthAddress, deficit.toString());
+    const fundHash = await buildAndSubmit(vault, cd.callData, BigInt(cd.value));
+    await publicClient.waitForTransactionReceipt({ hash: fundHash as `0x${string}` });
+  }
+
+  const hashes: string[] = [];
+
+  for (const tok of tokens) {
+    const data = encodeFunctionData({
+      abi: ERC20_ABI,
+      functionName: "transfer",
+      args: [toAddress, tok.raw],
+    });
+    const h = await walletClient.sendTransaction({ to: tok.address, data });
+    await publicClient.waitForTransactionReceipt({ hash: h });
+    hashes.push(h);
+  }
+
+  const remainingEth = await publicClient.getBalance({ address: stealthAddr });
+  const finalGasCost = gasPrice * GAS_ETH;
+  if (remainingEth > finalGasCost) {
+    const h = await walletClient.sendTransaction({
+      to: toAddress,
+      value: remainingEth - finalGasCost,
+      gas: GAS_ETH,
+    });
+    hashes.push(h);
+  }
+
+  return hashes;
 }
 
 async function resolveAddress(
@@ -300,6 +355,9 @@ const ERC20_ABI = [
     inputs: [], outputs: [{ type: "string" }] },
   { name: "decimals", type: "function", stateMutability: "view",
     inputs: [], outputs: [{ type: "uint8" }] },
+  { name: "transfer", type: "function", stateMutability: "nonpayable",
+    inputs: [{ name: "to", type: "address" }, { name: "amount", type: "uint256" }],
+    outputs: [{ type: "bool" }] },
 ] as const;
 
 const TRANSFER_SIG = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
