@@ -187,6 +187,49 @@ export async function createWallet(): Promise<Vault> {
   return vault;
 }
 
+export interface WalletToken {
+  address: string;
+  symbol: string;
+  decimals: number;
+  balance: string;
+  logo: string;
+}
+
+const TOKEN_LOGOS: Record<string, string> = {
+  "": "/eth.png",
+  "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913": "/usdc.png",
+};
+
+export async function fetchWalletTokens(address: string): Promise<WalletToken[]> {
+  const tokens: WalletToken[] = [];
+
+  const ethRaw = await publicClient.getBalance({ address: address as `0x${string}` });
+  tokens.push({ address: "", symbol: "ETH", decimals: 18, balance: formatEther(ethRaw), logo: "/eth.png" });
+
+  try {
+    const res = await fetch(`https://base.blockscout.com/api/v2/addresses/${address}/token-balances`);
+    const data = await res.json() as Array<{
+      token: { address: string; decimals: string; symbol: string; icon_url?: string | null };
+      value: string;
+    }>;
+    for (const item of data) {
+      if (!item.value || BigInt(item.value) === 0n) continue;
+      const decimals = parseInt(item.token.decimals) || 18;
+      const bal = formatUnits(BigInt(item.value), decimals);
+      const addrLower = item.token.address.toLowerCase();
+      tokens.push({
+        address: item.token.address,
+        symbol: item.token.symbol,
+        decimals,
+        balance: parseFloat(bal).toFixed(decimals > 6 ? 6 : decimals).replace(/\.?0+$/, ""),
+        logo: TOKEN_LOGOS[addrLower] ?? item.token.icon_url ?? "",
+      });
+    }
+  } catch {}
+
+  return tokens;
+}
+
 let priceCache: { value: number; ts: number } | null = null;
 const PRICE_TTL = 2 * 60 * 1000;
 

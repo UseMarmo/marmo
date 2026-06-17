@@ -343,6 +343,13 @@ button, input, select, textarea { font-family: inherit; }
 .token-selector__option:hover { background: var(--glass-bg-2); }
 .token-selector__option--active { color: var(--blue-2); }
 
+.token-selector__bal {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
 .token-logo {
   width: 20px;
   height: 20px;

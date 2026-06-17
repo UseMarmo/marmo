@@ -8,9 +8,11 @@ import {
   getStealthMetaAddress,
   buildAndSubmit,
   fetchEthPrice,
+  fetchWalletTokens,
   shortAddress,
   type Vault,
   type BalanceResult,
+  type WalletToken,
 } from "./wallet.js";
 import * as core from "./core.js";
 
@@ -243,21 +245,61 @@ function ReceiveScreen({ vault, onBack }: { vault: Vault; onBack: () => void }) 
   );
 }
 
-const KNOWN_TOKENS: Record<string, { symbol: string; logo: string; decimals: number }> = {
-  "": { symbol: "ETH", logo: "/eth.png", decimals: 18 },
-  "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913": { symbol: "USDC", logo: "/usdc.png", decimals: 6 },
-};
-
 function TokenLogo({ logo, symbol }: { logo: string; symbol: string }) {
   const [failed, setFailed] = useState(false);
-  if (failed) return <span className="token-logo token-logo--fallback">?</span>;
+  if (!logo || failed) return <span className="token-logo token-logo--fallback">?</span>;
   return <img src={logo} width={20} height={20} className="token-logo" alt={symbol} onError={() => setFailed(true)} />;
+}
+
+function TokenSelector({ value, onChange, tokens }: {
+  value: string;
+  onChange: (v: string) => void;
+  tokens: WalletToken[];
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const current = tokens.find(t => t.address === value) ?? tokens[0];
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  return (
+    <div className="token-selector" ref={ref}>
+      <button type="button" className="token-selector__trigger" onClick={() => setOpen(!open)}>
+        {current && <TokenLogo logo={current.logo} symbol={current.symbol} />}
+        <span>{current?.symbol ?? "Select"}</span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+      {open && (
+        <div className="token-selector__menu">
+          {tokens.map((tok) => (
+            <button
+              key={tok.address}
+              type="button"
+              className={`token-selector__option${value === tok.address ? " token-selector__option--active" : ""}`}
+              onClick={() => { onChange(tok.address); setOpen(false); }}
+            >
+              <TokenLogo logo={tok.logo} symbol={tok.symbol} />
+              <span>{tok.symbol}</span>
+              <span className="token-selector__bal">{tok.balance}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 type SendStep = "input" | "preview";
 
 function SendScreen({ vault, balance, onBack }: { vault: Vault; balance: BalanceResult | null; onBack: () => void }) {
   const [step, setStep] = useState<SendStep>("input");
+  const [tokens, setTokens] = useState<WalletToken[]>([{ address: "", symbol: "ETH", decimals: 18, balance: "0", logo: "/eth.png" }]);
   const [token, setToken] = useState("");
   const [amountMode, setAmountMode] = useState<"token" | "usd">("token");
   const [amountRaw, setAmountRaw] = useState("");
@@ -268,19 +310,23 @@ function SendScreen({ vault, balance, onBack }: { vault: Vault; balance: Balance
   const [err, setErr] = useState("");
   const amountRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { fetchEthPrice().then(setEthPrice); }, []);
+  useEffect(() => {
+    fetchEthPrice().then(setEthPrice);
+    fetchWalletTokens(vault.address).then(setTokens);
+  }, [vault.address]);
 
   useEffect(() => {
     if (step === "input") setTimeout(() => amountRef.current?.focus(), 80);
   }, [step]);
 
-  const tokenInfo = KNOWN_TOKENS[token] ?? { symbol: "?", logo: "", decimals: 18 };
-  const isUSDC = token !== "";
-  const price = isUSDC ? 1 : ethPrice;
+  const tokenInfo = tokens.find(t => t.address === token) ?? tokens[0];
+  const isStablecoin = token !== "" && (tokenInfo.symbol === "USDC" || tokenInfo.symbol === "USDT" || tokenInfo.symbol === "DAI");
+  const price = isStablecoin ? 1 : ethPrice;
   const parsed = parseFloat(amountRaw) || 0;
   const tokenAmount = amountMode === "token" ? parsed : (price > 0 ? parsed / price : 0);
   const usdAmount = amountMode === "usd" ? parsed : parsed * price;
-  const sendAmountWei = BigInt(Math.round(tokenAmount * 10 ** tokenInfo.decimals)).toString();
+  const decimals = tokenInfo?.decimals ?? 18;
+  const sendAmountWei = BigInt(Math.round(tokenAmount * 10 ** decimals)).toString();
 
   function handleAmountInput(e: React.ChangeEvent<HTMLInputElement>) {
     const v = e.target.value.replace(/[^0-9.]/g, "").replace(/(\..*?)\./g, "$1");
@@ -389,17 +435,12 @@ function SendScreen({ vault, balance, onBack }: { vault: Vault; balance: Balance
     <div className="screen send-screen">
       <button className="back" onClick={onBack}>← Back</button>
 
-      <div className="token-tabs">
-        {Object.entries(KNOWN_TOKENS).map(([addr, tok]) => (
-          <button
-            key={addr}
-            className={`token-tab${token === addr ? " token-tab--active" : ""}`}
-            onClick={() => { setToken(addr); setAmountRaw(""); }}
-          >
-            <TokenLogo logo={tok.logo} symbol={tok.symbol} />
-            {tok.symbol}
-          </button>
-        ))}
+      <div className="field">
+        <label>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          Token
+        </label>
+        <TokenSelector value={token} onChange={(v) => { setToken(v); setAmountRaw(""); }} tokens={tokens} />
       </div>
 
       <div className="amount-wrap" onClick={() => amountRef.current?.focus()}>
@@ -422,17 +463,14 @@ function SendScreen({ vault, balance, onBack }: { vault: Vault; balance: Balance
             <SwapIcon />
           </button>
         </div>
-        {balance && (
+        {tokenInfo && (
           <button
             className="amount-max"
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              const max = isUSDC ? balance.usdcRaw : balance.ethRaw;
-              const decimals = tokenInfo.decimals;
-              const raw = (Number(max) / 10 ** decimals).toFixed(decimals === 18 ? 8 : 6).replace(/\.?0+$/, "");
               setAmountMode("token");
-              setAmountRaw(raw);
+              setAmountRaw(tokenInfo.balance);
             }}
           >
             Max
