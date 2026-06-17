@@ -381,8 +381,7 @@ export async function buildAndSubmit(
   const sender = vault.address as `0x${string}`;
   const shardAAddress = privateKeyToAddress(vault.shardAPrivKey);
 
-  const [code, nonce, feeData] = await Promise.all([
-    publicClient.getCode({ address: sender }),
+  const [nonce, feeData] = await Promise.all([
     publicClient.readContract({
       address: ENTRY_POINT,
       abi: EP_ABI,
@@ -392,7 +391,13 @@ export async function buildAndSubmit(
     publicClient.estimateFeesPerGas(),
   ]);
 
-  const isDeployed = !!code && code !== "0x";
+  let isDeployed = false;
+  try {
+    const code = await publicClient.getCode({ address: sender });
+    isDeployed = !!code && code !== "0x";
+  } catch {
+    isDeployed = false;
+  }
 
   let factory: `0x${string}` | null = null;
   let factoryData: `0x${string}` | null = null;

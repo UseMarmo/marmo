@@ -556,7 +556,9 @@ function AddTokenModal({ walletAddress, onAdd, onClose }: {
   );
 }
 
-type SendStep = "input" | "preview";
+type TxResult = { ok: true; hash: string } | { ok: false; message: string };
+
+type SendStep = "input" | "preview" | "result";
 
 function SendScreen({ vault, balance, onBack }: { vault: Vault; balance: BalanceResult | null; onBack: () => void }) {
   const [step, setStep] = useState<SendStep>("input");
@@ -568,7 +570,7 @@ function SendScreen({ vault, balance, onBack }: { vault: Vault; balance: Balance
   const [to, setTo] = useState("");
   const [ethPrice, setEthPrice] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{ hash: string; url: string } | null>(null);
+  const [txResult, setTxResult] = useState<TxResult | null>(null);
   const [err, setErr] = useState("");
   const amountRef = useRef<HTMLInputElement>(null);
 
@@ -623,7 +625,7 @@ function SendScreen({ vault, balance, onBack }: { vault: Vault; balance: Balance
   async function submit() {
     setLoading(true);
     setErr("");
-    setResult(null);
+    setTxResult(null);
     try {
       const isStealthy = to.length > 42;
       let hash: string;
@@ -636,13 +638,47 @@ function SendScreen({ vault, balance, onBack }: { vault: Vault; balance: Balance
         hash = await buildAndSubmit(vault, cd.callData, BigInt(cd.value));
       }
       haptic("success");
-      setResult({ hash, url: `https://basescan.org/tx/${hash}` });
+      setTxResult({ ok: true, hash });
+      setStep("result");
     } catch (e) {
-      setErr(errMsg(e));
       haptic("error");
+      setTxResult({ ok: false, message: errMsg(e) });
+      setStep("result");
     } finally {
       setLoading(false);
     }
+  }
+
+  if (step === "result" && txResult) {
+    const short = txResult.ok ? `${txResult.hash.slice(0, 10)}…${txResult.hash.slice(-8)}` : "";
+    return (
+      <div className="screen send-screen tx-result">
+        <img
+          src={txResult.ok ? "/icons8-success-96.png" : "/icons8-fail-96.png"}
+          className="tx-result__icon"
+          alt=""
+        />
+        <h2 className="tx-result__title">{txResult.ok ? "Sent!" : "Transaction Failed"}</h2>
+
+        {txResult.ok ? (
+          <>
+            <div className="tx-result__hash-row">
+              <span className="tx-result__hash">{short}</span>
+              <button className="tx-result__copy" onClick={() => navigator.clipboard.writeText(txResult.hash)} aria-label="Copy tx hash">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              </button>
+            </div>
+            <a className="btn btn--primary tx-result__basescan" href={`https://basescan.org/tx/${txResult.hash}`} target="_blank" rel="noopener">
+              Open in Basescan ↗
+            </a>
+          </>
+        ) : (
+          <p className="tx-result__err">{txResult.message}</p>
+        )}
+
+        <button className="btn btn--ghost" onClick={onBack}>Close</button>
+      </div>
+    );
   }
 
   if (step === "preview") {
@@ -676,20 +712,11 @@ function SendScreen({ vault, balance, onBack }: { vault: Vault; balance: Balance
           </div>
         </div>
 
-        {!result && (
-          <button className="btn btn--primary" onClick={submit} disabled={loading}>
-            {loading ? "Signing…" : "Confirm & Send"}
-          </button>
-        )}
+        <button className="btn btn--primary" onClick={submit} disabled={loading}>
+          {loading ? "Signing…" : "Confirm & Send"}
+        </button>
 
         {err && <p className="err">{err}</p>}
-
-        {result && (
-          <div className="result-ok">
-            Submitted
-            <a href={result.url} target="_blank" rel="noopener">View on BaseScan ↗</a>
-          </div>
-        )}
       </div>
     );
   }
