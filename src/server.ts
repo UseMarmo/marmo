@@ -24,13 +24,13 @@ function today(): string {
 }
 
 app.get("/", (c) =>
-  c.json({ service: "marmo-core", version: "0.2.0", chain: "base" })
+  c.json({ service: "marmo-core", version: "0.2.0", network: "base-sepolia" })
 );
 
 app.get("/health", async (c) => {
   const db = await pingStore();
   return c.json(
-    { ok: db, service: "marmo-core", chain: "base", db: db ? "up" : "down" },
+    { ok: db, service: "marmo-core", network: "base-sepolia", db: db ? "up" : "down" },
     db ? 200 : 503
   );
 });
