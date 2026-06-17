@@ -446,13 +446,17 @@ function AddTokenModal({ walletAddress, onAdd, onClose }: {
     }
   }
 
-  async function paste() {
-    try {
-      const text = await navigator.clipboard.readText();
-      setCa(text.trim());
-      setPreview(null);
-      setErr("");
-    } catch {}
+  function paste() {
+    const tg = (window as { Telegram?: { WebApp?: { readTextFromClipboard?: (cb: (t: string | null) => void) => void } } }).Telegram?.WebApp;
+    if (tg?.readTextFromClipboard) {
+      tg.readTextFromClipboard((text) => {
+        if (text) { setCa(text.trim()); setPreview(null); setErr(""); }
+      });
+    } else {
+      navigator.clipboard.readText().then((text) => {
+        setCa(text.trim()); setPreview(null); setErr("");
+      }).catch(() => {});
+    }
   }
 
   function confirm() {
