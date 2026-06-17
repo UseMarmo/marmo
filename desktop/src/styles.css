@@ -488,6 +488,29 @@ input {
   color: #ffd2d2;
 }
 
+.meta-addr {
+  width: 100%;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 0.8rem 0.9rem;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  resize: none;
+  outline: none;
+  word-break: break-all;
+}
+
+.balance-usdc {
+  display: block;
+  font-family: var(--mono);
+  font-size: 0.9rem;
+  color: var(--muted);
+  margin-top: 0.25rem;
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     animation: none !important;
