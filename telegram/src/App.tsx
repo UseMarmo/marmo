@@ -262,7 +262,7 @@ function SecurityModal({ onClose }: { onClose: () => void }) {
               </div>
               <div className="shard-item">
                 <span className="shard-item__label">Co-signer</span>
-                <span className="shard-item__desc">Held by Marmo's server. Signs blind — it never sees your recipient or amount, only a hash.</span>
+                <span className="shard-item__desc">Held by Marmo's server. Signs blind; it never sees your recipient or amount, only a hash.</span>
               </div>
               <div className="shard-item">
                 <span className="shard-item__label">Passkey</span>
@@ -292,7 +292,7 @@ function SecurityModal({ onClose }: { onClose: () => void }) {
           </div>
           <div>
             <div className="modal-section__title">Non-custodial</div>
-            <p className="modal-section__body">Your wallet is a smart contract on Base. Marmo never holds your funds or controls your keys. If Marmo disappeared tomorrow, your assets are still yours — recoverable with any two shards.</p>
+            <p className="modal-section__body">Your wallet is a smart contract on Base. Marmo never holds your funds or controls your keys. If Marmo disappeared tomorrow, your assets are still yours, recoverable with any two shards.</p>
           </div>
         </div>
       </div>
@@ -467,7 +467,14 @@ function ReceiveScreen({ vault, onBack }: { vault: Vault; onBack: () => void }) 
           <div className="net-warn">
             <div className="net-warn__row">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-              <span>Only send assets on the <strong>Base network</strong> to this address.</span>
+              <span>Only send assets on the <strong>Base network</strong> to this address. Assets sent from another network may be permanently lost.</span>
+            </div>
+            <div className="net-warn__support">
+              For support contact{" "}
+              <a href="mailto:contact@usemarmo.xyz" className="net-warn__email">
+                contact@usemarmo.xyz
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17L17 7"/><path d="M7 7h10v10"/></svg>
+              </a>
             </div>
           </div>
         </>
@@ -476,7 +483,7 @@ function ReceiveScreen({ vault, onBack }: { vault: Vault; onBack: () => void }) 
       {tab === "private" && (
         <>
           <div className="stealth-explain">
-            <p>Share your stealth meta-address so senders can pay you privately. Each payment lands at a unique one-time address — only you can detect and claim it.</p>
+            <p>Share your stealth meta-address so senders can pay you privately. Each payment lands at a unique one-time address. Only you can detect and claim it.</p>
           </div>
 
           <div className="stealth-meta-card">
@@ -488,14 +495,12 @@ function ReceiveScreen({ vault, onBack }: { vault: Vault; onBack: () => void }) 
           </div>
 
           <div className="stealth-scan-section">
-            <div className="stealth-scan-section__header">
-              <span className="stealth-scan-section__title">Incoming private payments</span>
-              <button className="btn btn--ghost stealth-scan-btn" onClick={scan} disabled={scanning}>
-                {scanning
-                  ? <><svg className="swap-fetching__spinner" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg> Scanning…</>
-                  : "Scan"}
-              </button>
-            </div>
+            <span className="stealth-scan-section__title">Incoming private payments</span>
+            <button className="btn btn--ghost" onClick={scan} disabled={scanning} style={{ width: "100%" }}>
+              {scanning
+                ? <><svg className="swap-fetching__spinner" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{marginRight:"0.35rem"}}><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>Scanning…</>
+                : "Scan for payments"}
+            </button>
 
             {scanErr && <p className="err">{scanErr}</p>}
 
@@ -526,7 +531,7 @@ function ReceiveScreen({ vault, onBack }: { vault: Vault; onBack: () => void }) 
                       </div>
                       {result?.ok && (
                         <a className="stealth-payment__tx" href={`https://basescan.org/tx/${result.hash}`} target="_blank" rel="noopener">
-                          Swept ✓ — view on Basescan ↗
+                          Swept. View on Basescan ↗
                         </a>
                       )}
                       {result && !result.ok && <p className="err" style={{marginTop:"0.4rem"}}>{result.err}</p>}
@@ -623,7 +628,7 @@ function AddTokenModal({ walletAddress, onAdd, onClose }: {
     const apply = (text: string | null) => {
       const val = text?.trim() ?? "";
       if (val) { setCa(val); setPreview(null); setErr(""); }
-      else setErr("Nothing in clipboard — long-press the field and tap Paste.");
+      else setErr("Nothing in clipboard. Long-press the field and tap Paste.");
     };
 
     navigator.clipboard.readText().then(apply).catch(() => {
@@ -1291,7 +1296,7 @@ function SwapScreen({ vault, onBack }: { vault: Vault; onBack: () => void }) {
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M6 9l6 6 6-6"/></svg>
             </button>
             <div className="swap-amount-out">
-              {outAmount || <span className="swap-amount-out__empty">—</span>}
+              {outAmount || <span className="swap-amount-out__empty">·</span>}
             </div>
           </div>
         </div>

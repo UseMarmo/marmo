@@ -82,7 +82,7 @@ function renderDashboard(): void {
           <span class="card__label">Marmo Wallet</span>
           <span class="pill pill--multisig">2-of-3</span>
         </div>
-        <div class="balance" data-balance>—</div>
+        <div class="balance" data-balance>-</div>
         <button class="addr" data-addr title="Copy address">
           <code>${shortAddress(vault.address)}</code><span>copy</span>
         </button>
@@ -224,7 +224,7 @@ async function refreshBalance(): Promise<void> {
     const bal = await getBalance(vault.address);
     node.innerHTML = `${bal.eth} <small>ETH</small><br><span class="balance-usdc">${bal.usdc} USDC</span>`;
   } catch {
-    node.textContent = "—";
+    node.textContent = "-";
   }
 }
 

@@ -125,7 +125,6 @@ export async function verifyPasskey(credentialId: string): Promise<void> {
       },
     });
   } catch {
-    // passkey verification failed silently — wallet still loads, security is best-effort
   }
 }
 

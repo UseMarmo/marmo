@@ -383,7 +383,7 @@ app.get("/v1/wallets/:address/stealth/scan", async (c) => {
   }
 
   if (!wallet.stealthMetaAddress || !wallet.encViewPriv) {
-    return c.json({ error: "stealth not registered — call POST /stealth/register first" }, 400);
+    return c.json({ error: "stealth not registered, call POST /stealth/register first" }, 400);
   }
 
   const metaHex = wallet.stealthMetaAddress.replace(/^0x/, "");
