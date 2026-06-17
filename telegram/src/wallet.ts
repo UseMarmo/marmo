@@ -1,5 +1,5 @@
 import { secp256k1 } from "@noble/curves/secp256k1";
-import { createPublicClient, http, formatEther, formatUnits, bytesToHex, hexToBytes } from "viem";
+import { createPublicClient, http, formatEther, formatUnits, bytesToHex, hexToBytes, encodeFunctionData } from "viem";
 import { generatePrivateKey, privateKeyToAddress, privateKeyToAccount } from "viem/accounts";
 import { base } from "viem/chains";
 import * as core from "./core.js";
@@ -34,10 +34,10 @@ const EP_ABI = [
 
 const FACTORY_ABI = [
   { name: "predictAddress", type: "function", stateMutability: "view",
-    inputs: [
-      { name: "owners", type: "address[3]" },
-      { name: "salt", type: "uint256" },
-    ],
+    inputs: [{ name: "owners", type: "address[3]" }, { name: "salt", type: "uint256" }],
+    outputs: [{ type: "address" }] },
+  { name: "createAccount", type: "function", stateMutability: "nonpayable",
+    inputs: [{ name: "owners", type: "address[3]" }, { name: "salt", type: "uint256" }],
     outputs: [{ type: "address" }] },
 ] as const;
 
@@ -51,6 +51,7 @@ export interface Vault {
   viewPrivKey: `0x${string}`;
   credentialId: string;
   apiKey: string;
+  shardBAddress?: string;
 }
 
 export interface BalanceResult {
@@ -176,6 +177,7 @@ export async function createWallet(): Promise<Vault> {
     viewPrivKey,
     credentialId,
     apiKey,
+    shardBAddress,
   };
 
   saveVault(vault);
@@ -377,7 +379,10 @@ export async function buildAndSubmit(
   if (!BUNDLER_URL) throw new Error("VITE_BUNDLER_URL is not configured");
 
   const sender = vault.address as `0x${string}`;
-  const [nonce, feeData] = await Promise.all([
+  const shardAAddress = privateKeyToAddress(vault.shardAPrivKey);
+
+  const [code, nonce, feeData] = await Promise.all([
+    publicClient.getCode({ address: sender }),
     publicClient.readContract({
       address: ENTRY_POINT,
       abi: EP_ABI,
@@ -387,11 +392,35 @@ export async function buildAndSubmit(
     publicClient.estimateFeesPerGas(),
   ]);
 
-  const verificationGasLimit = 200_000n;
-  const callGasLimit = value > 0n ? 100_000n : 150_000n;
-  const preVerificationGas = 50_000n;
+  const isDeployed = !!code && code !== "0x";
+
+  let factory: `0x${string}` | null = null;
+  let factoryData: `0x${string}` | null = null;
+
+  if (!isDeployed) {
+    let shardB = vault.shardBAddress as `0x${string}` | undefined;
+    if (!shardB) {
+      const info = await core.getWalletInfo(shardAAddress);
+      shardB = info.shardBAddress;
+    }
+    const shardCAddress = privateKeyToAddress(vault.shardCPrivKey);
+    factory = FACTORY_ADDRESS;
+    factoryData = encodeFunctionData({
+      abi: FACTORY_ABI,
+      functionName: "createAccount",
+      args: [[shardAAddress, shardB, shardCAddress], 0n],
+    });
+  }
+
+  const verificationGasLimit = isDeployed ? 200_000n : 500_000n;
+  const callGasLimit = isDeployed ? (value > 0n ? 100_000n : 150_000n) : 200_000n;
+  const preVerificationGas = 60_000n;
   const maxFeePerGas = feeData.maxFeePerGas ?? 2_000_000n;
   const maxPriorityFeePerGas = feeData.maxPriorityFeePerGas ?? 1_000_000n;
+
+  const initCode = factory
+    ? (`0x${factory.slice(2)}${(factoryData ?? "0x").slice(2)}` as `0x${string}`)
+    : ("0x" as `0x${string}`);
 
   const accountGasLimits = packBytes32(verificationGasLimit, callGasLimit);
   const gasFees = packBytes32(maxPriorityFeePerGas, maxFeePerGas);
@@ -399,7 +428,7 @@ export async function buildAndSubmit(
   const userOpForHash = {
     sender,
     nonce,
-    initCode: "0x" as `0x${string}`,
+    initCode,
     callData,
     accountGasLimits,
     preVerificationGas,
@@ -418,7 +447,7 @@ export async function buildAndSubmit(
   const sigA = await privateKeyToAccount(vault.shardAPrivKey).signMessage({
     message: { raw: hexToBytes(userOpHash) },
   });
-  const cosignKey = privateKeyToAddress(vault.shardAPrivKey);
+  const cosignKey = shardAAddress;
   const sigB = await core.cosign(cosignKey, vault.apiKey, userOpHash);
   const signature = `0x${sigA.slice(2)}${sigB.slice(2)}` as `0x${string}`;
 
@@ -426,6 +455,8 @@ export async function buildAndSubmit(
   const unpackedUserOp = {
     sender,
     nonce: hex(nonce),
+    factory: factory ?? null,
+    factoryData: factoryData ?? "0x",
     callData,
     callGasLimit: hex(callGasLimit),
     verificationGasLimit: hex(verificationGasLimit),

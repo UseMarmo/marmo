@@ -24,6 +24,17 @@ export interface RegisterResult {
   apiKey: string;
 }
 
+export interface WalletInfo {
+  address: string;
+  shardBAddress: `0x${string}`;
+}
+
+export async function getWalletInfo(address: string): Promise<WalletInfo> {
+  const res = await coreFetch(`/v1/wallets/${address}`);
+  if (!res.ok) throw new Error("Wallet not found on co-signer");
+  return res.json() as Promise<WalletInfo>;
+}
+
 export async function registerWallet(
   address: string,
   shardAAddress: string,
