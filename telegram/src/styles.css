@@ -396,19 +396,40 @@ button, input, select, textarea { font-family: inherit; }
 
 .net-warn {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 0.5rem;
-  padding: 0.65rem 0.85rem;
+  padding: 0.75rem 0.9rem;
   border-radius: var(--radius-sm);
   background: var(--warn-bg);
   border: 1px solid var(--warn-brd);
   font-size: 0.82rem;
   color: var(--warn-text);
-  line-height: 1.4;
+  line-height: 1.45;
 }
 
-.net-warn svg { flex-shrink: 0; }
+.net-warn__row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
 .net-warn strong { color: inherit; }
+
+.net-warn__support {
+  font-size: 0.78rem;
+  color: var(--muted);
+  padding-left: 1.5rem;
+}
+
+.net-warn__email {
+  color: var(--blue-2);
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  white-space: nowrap;
+}
 
 .quorum {
   font-size: 0.82rem;
