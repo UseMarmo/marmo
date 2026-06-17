@@ -1,0 +1,30 @@
+name: Telegram Mini App
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+    paths:
+      - 'telegram/**'
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'telegram/**'
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+        working-directory: telegram
+      - run: bun run build
+        working-directory: telegram
+      - uses: actions/upload-artifact@v4
+        if: github.ref == 'refs/heads/main'
+        with:
+          name: telegram-dist
+          path: telegram/dist/
+          retention-days: 7
