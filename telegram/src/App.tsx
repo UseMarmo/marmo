@@ -7,6 +7,7 @@ import {
   getBalance,
   getStealthMetaAddress,
   buildAndSubmit,
+  fetchEthPrice,
   shortAddress,
   type Vault,
   type BalanceResult,
@@ -25,6 +26,13 @@ const CopyIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <rect x="9" y="9" width="13" height="13" rx="2" />
     <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+  </svg>
+);
+
+const SwapIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M7 16V4m0 0L3 8m4-4l4 4" />
+    <path d="M17 8v12m0 0l4-4m-4 4l-4-4" />
   </svg>
 );
 
@@ -88,7 +96,7 @@ export default function App() {
   }
 
   if (screen === "send" && vault) {
-    return <SendScreen vault={vault} onBack={() => navigate("dashboard")} />;
+    return <SendScreen vault={vault} balance={balance} onBack={() => navigate("dashboard")} />;
   }
 
   if (screen === "receive" && vault) {
@@ -246,78 +254,78 @@ function TokenLogo({ logo, symbol }: { logo: string; symbol: string }) {
   return <img src={logo} width={20} height={20} className="token-logo" alt={symbol} onError={() => setFailed(true)} />;
 }
 
-function TokenSelector({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+type SendStep = "input" | "preview";
 
-  const known = Object.entries(KNOWN_TOKENS);
-  const current = KNOWN_TOKENS[value] ?? { symbol: value.slice(0, 8) + "…", logo: "", decimals: 18 };
-
-  useEffect(() => {
-    function handler(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
-
-  return (
-    <div className="token-selector" ref={ref}>
-      <button type="button" className="token-selector__trigger" onClick={() => setOpen(!open)}>
-        <TokenLogo logo={current.logo} symbol={current.symbol} />
-        <span>{current.symbol}</span>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M6 9l6 6 6-6"/></svg>
-      </button>
-      {open && (
-        <div className="token-selector__menu">
-          {known.map(([addr, tok]) => (
-            <button
-              key={addr}
-              type="button"
-              className={`token-selector__option${value === addr ? " token-selector__option--active" : ""}`}
-              onClick={() => { onChange(addr); setOpen(false); }}
-            >
-              <TokenLogo logo={tok.logo} symbol={tok.symbol} />
-              <span>{tok.symbol}</span>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function SendScreen({ vault, onBack }: { vault: Vault; onBack: () => void }) {
-  const [to, setTo] = useState("");
-  const [amount, setAmount] = useState("");
+function SendScreen({ vault, balance, onBack }: { vault: Vault; balance: BalanceResult | null; onBack: () => void }) {
+  const [step, setStep] = useState<SendStep>("input");
   const [token, setToken] = useState("");
+  const [amountMode, setAmountMode] = useState<"token" | "usd">("token");
+  const [amountRaw, setAmountRaw] = useState("");
+  const [to, setTo] = useState("");
+  const [ethPrice, setEthPrice] = useState(0);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ hash: string; url: string } | null>(null);
   const [err, setErr] = useState("");
+  const amountRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { fetchEthPrice().then(setEthPrice); }, []);
+
+  useEffect(() => {
+    if (step === "input") setTimeout(() => amountRef.current?.focus(), 80);
+  }, [step]);
+
+  const tokenInfo = KNOWN_TOKENS[token] ?? { symbol: "?", logo: "", decimals: 18 };
+  const isUSDC = token !== "";
+  const price = isUSDC ? 1 : ethPrice;
+  const parsed = parseFloat(amountRaw) || 0;
+  const tokenAmount = amountMode === "token" ? parsed : (price > 0 ? parsed / price : 0);
+  const usdAmount = amountMode === "usd" ? parsed : parsed * price;
+  const sendAmountWei = BigInt(Math.round(tokenAmount * 10 ** tokenInfo.decimals)).toString();
+
+  function handleAmountInput(e: React.ChangeEvent<HTMLInputElement>) {
+    const v = e.target.value.replace(/[^0-9.]/g, "").replace(/(\..*?)\./g, "$1");
+    setAmountRaw(v);
+  }
+
+  function swapMode() {
+    const next = amountMode === "token" ? "usd" : "token";
+    if (parsed > 0 && price > 0) {
+      const converted = next === "usd" ? parsed * price : parsed / price;
+      setAmountRaw(converted.toFixed(next === "usd" ? 2 : 6).replace(/\.?0+$/, ""));
+    }
+    setAmountMode(next);
+    setTimeout(() => amountRef.current?.focus(), 40);
+  }
+
+  const primaryDisplay = amountMode === "usd"
+    ? `$${amountRaw || ""}`
+    : (amountRaw || "");
+
+  const secondaryDisplay = amountMode === "token"
+    ? `$${usdAmount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    : `${tokenAmount > 0 ? tokenAmount.toFixed(8).replace(/\.?0+$/, "") : "0"} ${tokenInfo.symbol}`;
+
+  function goPreview() {
+    if (!parsed) { setErr("Enter an amount"); return; }
+    if (!to.startsWith("0x") || to.length < 10) { setErr("Enter a valid recipient address"); return; }
+    setErr("");
+    setStep("preview");
+  }
 
   async function submit() {
-    if (!to.startsWith("0x") || to.length < 10) { setErr("Enter a valid address"); return; }
-    if (!amount || Number(amount) <= 0) { setErr("Enter an amount"); return; }
-
-    const tokenInfo = KNOWN_TOKENS[token] ?? { decimals: 18 };
-    const amountWei = BigInt(Math.round(Number(amount) * 10 ** tokenInfo.decimals)).toString();
-
     setLoading(true);
     setErr("");
     setResult(null);
-
     try {
       const isStealthy = to.length > 42;
       let hash: string;
-
       if (isStealthy) {
-        const cd = await core.buildStealthSend(vault.address, vault.apiKey, to, amountWei, token || undefined);
+        const cd = await core.buildStealthSend(vault.address, vault.apiKey, to, sendAmountWei, token || undefined);
         hash = await buildAndSubmit(vault, cd.callData, BigInt(cd.value));
       } else {
-        const cd = await core.buildSend(vault.address, vault.apiKey, to, amountWei, token || undefined);
+        const cd = await core.buildSend(vault.address, vault.apiKey, to, sendAmountWei, token || undefined);
         hash = await buildAndSubmit(vault, cd.callData, BigInt(cd.value));
       }
-
       haptic("success");
       setResult({ hash, url: `https://basescan.org/tx/${hash}` });
     } catch (e) {
@@ -328,50 +336,132 @@ function SendScreen({ vault, onBack }: { vault: Vault; onBack: () => void }) {
     }
   }
 
+  if (step === "preview") {
+    return (
+      <div className="screen send-screen">
+        <button className="back" onClick={() => { setStep("input"); setErr(""); }}>← Edit</button>
+        <h2 className="title title--sm">Review</h2>
+
+        <div className="preview-card">
+          <div className="preview-card__label">Sending</div>
+          <div className="preview-card__amount">
+            {tokenAmount > 0 ? tokenAmount.toFixed(8).replace(/\.?0+$/, "") : "0"} {tokenInfo.symbol}
+          </div>
+          <div className="preview-card__usd">
+            ~${usdAmount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </div>
+
+          <div className="preview-card__divider" />
+
+          <div className="preview-row">
+            <span className="preview-row__key">To</span>
+            <span className="preview-row__val preview-row__val--mono">{shortAddress(to)}</span>
+          </div>
+          <div className="preview-row">
+            <span className="preview-row__key">Network</span>
+            <span className="preview-row__val">Base</span>
+          </div>
+          <div className="preview-row">
+            <span className="preview-row__key">Signing</span>
+            <span className="preview-row__val">Device + Co-signer</span>
+          </div>
+        </div>
+
+        {!result && (
+          <button className="btn btn--primary" onClick={submit} disabled={loading}>
+            {loading ? "Signing…" : "Confirm & Send"}
+          </button>
+        )}
+
+        {err && <p className="err">{err}</p>}
+
+        {result && (
+          <div className="result-ok">
+            Submitted
+            <a href={result.url} target="_blank" rel="noopener">View on BaseScan ↗</a>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="screen send-screen">
       <button className="back" onClick={onBack}>← Back</button>
-      <h2 className="title title--sm">Send</h2>
+
+      <div className="token-tabs">
+        {Object.entries(KNOWN_TOKENS).map(([addr, tok]) => (
+          <button
+            key={addr}
+            className={`token-tab${token === addr ? " token-tab--active" : ""}`}
+            onClick={() => { setToken(addr); setAmountRaw(""); }}
+          >
+            <TokenLogo logo={tok.logo} symbol={tok.symbol} />
+            {tok.symbol}
+          </button>
+        ))}
+      </div>
+
+      <div className="amount-wrap" onClick={() => amountRef.current?.focus()}>
+        <div className="amount-display">
+          {amountMode === "usd" && amountRaw && <span className="amount-prefix">$</span>}
+          <input
+            ref={amountRef}
+            className="amount-input"
+            type="text"
+            inputMode="decimal"
+            placeholder="0"
+            value={amountRaw}
+            onChange={handleAmountInput}
+          />
+          {!amountRaw && amountMode === "usd" && null}
+        </div>
+        <div className="amount-secondary">
+          <span>{secondaryDisplay}</span>
+          <button className="swap-btn" type="button" onClick={(e) => { e.stopPropagation(); swapMode(); }}>
+            <SwapIcon />
+          </button>
+        </div>
+        {balance && (
+          <button
+            className="amount-max"
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              const max = isUSDC ? balance.usdcRaw : balance.ethRaw;
+              const decimals = tokenInfo.decimals;
+              const raw = (Number(max) / 10 ** decimals).toFixed(decimals === 18 ? 8 : 6).replace(/\.?0+$/, "");
+              setAmountMode("token");
+              setAmountRaw(raw);
+            }}
+          >
+            Max
+          </button>
+        )}
+      </div>
 
       <div className="field">
         <label>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
           Recipient
         </label>
-        <input value={to} onChange={(e) => setTo(e.target.value)} placeholder="0x… or stealth meta-address" />
-      </div>
-
-      <div className="field">
-        <label>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-          Amount
-        </label>
-        <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" min="0" step="0.000001" />
-      </div>
-
-      <div className="field">
-        <label>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-          Token
-        </label>
-        <TokenSelector value={token} onChange={setToken} />
+        <input
+          value={to}
+          onChange={(e) => setTo(e.target.value)}
+          placeholder="0x… or stealth meta-address"
+          style={{ fontSize: "16px" }}
+        />
       </div>
 
       <div className="quorum">
         Signing with <strong>Device</strong> + <strong>Co-signer</strong>
       </div>
 
-      <button className="btn btn--primary" onClick={submit} disabled={loading}>
-        {loading ? "Signing…" : "Sign & send"}
-      </button>
-
       {err && <p className="err">{err}</p>}
-      {result && (
-        <div className="result-ok">
-          Submitted
-          <a href={result.url} target="_blank" rel="noopener">View on BaseScan ↗</a>
-        </div>
-      )}
+
+      <button className="btn btn--primary" onClick={goPreview} disabled={!parsed || !to}>
+        Preview
+      </button>
     </div>
   );
 }

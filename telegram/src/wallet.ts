@@ -187,13 +187,19 @@ export async function createWallet(): Promise<Vault> {
   return vault;
 }
 
-async function fetchEthPrice(): Promise<number> {
+let priceCache: { value: number; ts: number } | null = null;
+const PRICE_TTL = 2 * 60 * 1000;
+
+export async function fetchEthPrice(): Promise<number> {
+  if (priceCache && Date.now() - priceCache.ts < PRICE_TTL) return priceCache.value;
   try {
     const res = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd");
     const data = await res.json() as { ethereum?: { usd?: number } };
-    return data.ethereum?.usd ?? 0;
+    const value = data.ethereum?.usd ?? 0;
+    if (value > 0) priceCache = { value, ts: Date.now() };
+    return value;
   } catch {
-    return 0;
+    return priceCache?.value ?? 0;
   }
 }
 
