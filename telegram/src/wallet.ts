@@ -211,19 +211,68 @@ const ERC20_META_ABI = [
     inputs: [], outputs: [{ type: "uint8" }] },
 ] as const;
 
+interface TokenCache { contracts: string[]; scannedThrough: number; }
+
+function loadTokenCache(address: string): TokenCache {
+  try {
+    const raw = localStorage.getItem(`marmo_tkc_${address.toLowerCase()}`);
+    if (raw) return JSON.parse(raw) as TokenCache;
+  } catch {}
+  return { contracts: [], scannedThrough: 0 };
+}
+
+function saveTokenCache(address: string, cache: TokenCache) {
+  try {
+    localStorage.setItem(`marmo_tkc_${address.toLowerCase()}`, JSON.stringify(cache));
+  } catch {}
+}
+
 export async function fetchWalletTokens(address: string): Promise<WalletToken[]> {
   const addr = address as `0x${string}`;
-  const currentBlock = await publicClient.getBlockNumber();
-  const fromBlock = currentBlock > 500_000n ? currentBlock - 500_000n : 0n;
+  const cache = loadTokenCache(address);
+  const CHUNK = 9_900n;
 
-  const [ethRaw, logs] = await Promise.all([
-    publicClient.getBalance({ address: addr }),
-    publicClient.getLogs({
+  const currentBlock = await publicClient.getBlockNumber();
+  const fromBlock = cache.scannedThrough
+    ? BigInt(cache.scannedThrough) + 1n
+    : currentBlock > CHUNK ? currentBlock - CHUNK : 0n;
+
+  if (fromBlock <= currentBlock) {
+    const toBlock = fromBlock + CHUNK < currentBlock ? fromBlock + CHUNK : currentBlock;
+    const logs = await publicClient.getLogs({
       fromBlock,
-      toBlock: "latest",
+      toBlock,
       event: TRANSFER_EVENT,
       args: { to: addr },
-    }).catch(() => []),
+    }).catch(() => []);
+
+    const found = logs.map(l => l.address.toLowerCase());
+    cache.contracts = [...new Set([...cache.contracts, ...found])];
+    cache.scannedThrough = Number(toBlock);
+    saveTokenCache(address, cache);
+  }
+
+  const [ethRaw, ...tokenResults] = await Promise.all([
+    publicClient.getBalance({ address: addr }),
+    ...cache.contracts.map(async (contract) => {
+      try {
+        const c = contract as `0x${string}`;
+        const [balance, symbol, decimals] = await Promise.all([
+          publicClient.readContract({ address: c, abi: ERC20_META_ABI, functionName: "balanceOf", args: [addr] }),
+          publicClient.readContract({ address: c, abi: ERC20_META_ABI, functionName: "symbol" }),
+          publicClient.readContract({ address: c, abi: ERC20_META_ABI, functionName: "decimals" }),
+        ]);
+        if ((balance as bigint) === 0n) return null;
+        const dec = Number(decimals);
+        return {
+          address: contract,
+          symbol: symbol as string,
+          decimals: dec,
+          balance: parseFloat(formatUnits(balance as bigint, dec)).toFixed(dec > 6 ? 6 : dec).replace(/\.?0+$/, ""),
+          logo: TOKEN_LOGO_MAP[contract] ?? "",
+        } satisfies WalletToken;
+      } catch { return null; }
+    }),
   ]);
 
   const tokens: WalletToken[] = [{
@@ -234,31 +283,7 @@ export async function fetchWalletTokens(address: string): Promise<WalletToken[]>
     logo: "/eth.png",
   }];
 
-  const uniqueContracts = [...new Set(logs.map(l => l.address.toLowerCase() as `0x${string}`))];
-
-  const results = await Promise.all(
-    uniqueContracts.map(async (contract) => {
-      try {
-        const [balance, symbol, decimals] = await Promise.all([
-          publicClient.readContract({ address: contract, abi: ERC20_META_ABI, functionName: "balanceOf", args: [addr] }),
-          publicClient.readContract({ address: contract, abi: ERC20_META_ABI, functionName: "symbol" }),
-          publicClient.readContract({ address: contract, abi: ERC20_META_ABI, functionName: "decimals" }),
-        ]);
-        if ((balance as bigint) === 0n) return null;
-        const dec = Number(decimals);
-        const bal = formatUnits(balance as bigint, dec);
-        return {
-          address: contract,
-          symbol: symbol as string,
-          decimals: dec,
-          balance: parseFloat(bal).toFixed(dec > 6 ? 6 : dec).replace(/\.?0+$/, ""),
-          logo: TOKEN_LOGO_MAP[contract] ?? "",
-        } satisfies WalletToken;
-      } catch { return null; }
-    })
-  );
-
-  for (const t of results) if (t) tokens.push(t);
+  for (const t of tokenResults) if (t) tokens.push(t);
   return tokens;
 }
 
