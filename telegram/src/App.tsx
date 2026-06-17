@@ -142,6 +142,69 @@ function WelcomeScreen({ onCreated }: { onCreated: (v: Vault) => void }) {
   );
 }
 
+function SecurityModal({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-panel" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <span className="modal-title">How Marmo protects you</span>
+          <button className="modal-close" onClick={onClose}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+
+        <div className="modal-section">
+          <div className="modal-section__icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </div>
+          <div>
+            <div className="modal-section__title">2-of-3 threshold security</div>
+            <p className="modal-section__body">Your signing key is split into three independent shards. Any two are needed to move funds. No single shard can do anything alone.</p>
+            <div className="shard-list">
+              <div className="shard-item">
+                <span className="shard-item__label">Device</span>
+                <span className="shard-item__desc">Stored on this device. Signs locally, never leaves.</span>
+              </div>
+              <div className="shard-item">
+                <span className="shard-item__label">Co-signer</span>
+                <span className="shard-item__desc">Held by Marmo's server. Signs blind — it never sees your recipient or amount, only a hash.</span>
+              </div>
+              <div className="shard-item">
+                <span className="shard-item__label">Passkey</span>
+                <span className="shard-item__desc">In your device's secure enclave. Used for recovery if your device key is lost.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="modal-divider" />
+
+        <div className="modal-section">
+          <div className="modal-section__icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+          </div>
+          <div>
+            <div className="modal-section__title">Stealth addresses</div>
+            <p className="modal-section__body">Every payment sent to your Marmo wallet lands at a unique one-time address derived from your public meta-address. No two payments share an on-chain link. An outside observer cannot tell they went to the same wallet.</p>
+          </div>
+        </div>
+
+        <div className="modal-divider" />
+
+        <div className="modal-section">
+          <div className="modal-section__icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          </div>
+          <div>
+            <div className="modal-section__title">Non-custodial</div>
+            <p className="modal-section__body">Your wallet is a smart contract on Base. Marmo never holds your funds or controls your keys. If Marmo disappeared tomorrow, your assets are still yours — recoverable with any two shards.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function DashboardScreen({
   vault,
   balance,
@@ -154,6 +217,7 @@ function DashboardScreen({
   onReceive: () => void;
 }) {
   const [copied, setCopied] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
 
   async function copy() {
     await navigator.clipboard.writeText(vault.address);
@@ -164,10 +228,13 @@ function DashboardScreen({
 
   return (
     <div className="screen dashboard">
+      {showHelp && <SecurityModal onClose={() => setShowHelp(false)} />}
       <div className="card">
         <div className="card__top">
           <span className="card__label">Marmo Wallet</span>
-          <span className="pill">2-of-3</span>
+          <button className="help-btn" onClick={() => setShowHelp(true)} aria-label="Security info">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><circle cx="12" cy="17" r=".5" fill="currentColor"/></svg>
+          </button>
         </div>
         <div className="balance">
           {balance ? (
