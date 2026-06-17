@@ -112,7 +112,7 @@ function WelcomeScreen({ onCreated }: { onCreated: (v: Vault) => void }) {
 
   return (
     <div className="screen welcome">
-      <img src="/logo.png" width={52} height={52} alt="Marmo" className="logo" />
+      <img src="/logo.jpg" width={52} height={52} alt="Marmo" className="logo" />
       <h1 className="title">One wallet,<br />split in three.</h1>
       <p className="sub">
         Your device, a co-signer, and your passkey. Any two can spend. No single one ever can.
