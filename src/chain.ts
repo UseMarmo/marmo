@@ -1,7 +1,7 @@
 import { createPublicClient, http, parseAbiItem } from "viem";
 import { base, baseSepolia } from "viem/chains";
 
-const NETWORK = process.env.MARMO_NETWORK ?? "base-sepolia";
+const NETWORK = process.env.MARMO_NETWORK ?? "base";
 
 export { NETWORK };
 

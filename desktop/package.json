@@ -1,6 +1,6 @@
 {
-  "name": "@marmo/desktop-client",
-  "version": "0.1.0",
+  "name": "@usemarmo/desktop",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,11 +12,11 @@
     "tauri:build": "tauri build"
   },
   "dependencies": {
-    "@marmoxyz/sui-kit": "^0.1.0",
-    "@mysten/sui": "^1.45.0",
+    "@noble/curves": "^1.4.0",
     "@tauri-apps/api": "^2.0.0",
     "@tauri-apps/plugin-dialog": "^2.0.0",
-    "@tauri-apps/plugin-fs": "^2.0.0"
+    "@tauri-apps/plugin-fs": "^2.0.0",
+    "viem": "^2.21.0"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0",
