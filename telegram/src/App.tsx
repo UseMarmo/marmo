@@ -10,6 +10,8 @@ import {
   buildAndSubmit,
   fetchEthPrice,
   fetchWalletTokens,
+  fetchTokenByAddress,
+  saveCustomTokenAddress,
   shortAddress,
   type Vault,
   type BalanceResult,
@@ -417,12 +419,102 @@ function TokenSelector({ value, onChange, tokens }: {
   );
 }
 
+function AddTokenModal({ walletAddress, onAdd, onClose }: {
+  walletAddress: string;
+  onAdd: (token: WalletToken) => void;
+  onClose: () => void;
+}) {
+  const [ca, setCa] = useState("");
+  const [fetching, setFetching] = useState(false);
+  const [preview, setPreview] = useState<WalletToken | null>(null);
+  const [err, setErr] = useState("");
+
+  const isValid = /^0x[0-9a-fA-F]{40}$/.test(ca.trim());
+
+  async function lookup() {
+    if (!isValid) return;
+    setFetching(true);
+    setErr("");
+    setPreview(null);
+    try {
+      const tok = await fetchTokenByAddress(walletAddress, ca.trim());
+      setPreview(tok);
+    } catch {
+      setErr("Could not find a token at that address.");
+    } finally {
+      setFetching(false);
+    }
+  }
+
+  async function paste() {
+    try {
+      const text = await navigator.clipboard.readText();
+      setCa(text.trim());
+      setPreview(null);
+      setErr("");
+    } catch {}
+  }
+
+  function confirm() {
+    if (!preview) return;
+    saveCustomTokenAddress(walletAddress, preview.address);
+    onAdd(preview);
+    onClose();
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-panel" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <span className="modal-title">Add token</span>
+          <button className="modal-close" onClick={onClose}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <p className="modal-hint">Paste the contract address of any token you hold on Base.</p>
+        <div className="ca-row">
+          <input
+            className="ca-input"
+            placeholder="0x…"
+            value={ca}
+            onChange={e => { setCa(e.target.value); setPreview(null); setErr(""); }}
+            style={{ fontSize: "16px" }}
+            autoComplete="off"
+            spellCheck={false}
+          />
+          <button className="ca-paste-btn" onClick={paste}>Paste</button>
+        </div>
+        {err && <p className="err" style={{ marginTop: "0.6rem" }}>{err}</p>}
+        {preview && (
+          <div className="ca-preview">
+            {preview.logo && <img src={preview.logo} width={22} height={22} className="token-icon" alt="" />}
+            <span className="ca-preview__sym">{preview.symbol}</span>
+            <span className="ca-preview__bal">{preview.balance} available</span>
+          </div>
+        )}
+        <div style={{ marginTop: "1.2rem" }}>
+          {!preview ? (
+            <button className="btn btn--primary" onClick={lookup} disabled={!isValid || fetching} style={{ width: "100%" }}>
+              {fetching ? "Looking up…" : "Look up"}
+            </button>
+          ) : (
+            <button className="btn btn--primary" onClick={confirm} style={{ width: "100%" }}>
+              Add {preview.symbol}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 type SendStep = "input" | "preview";
 
 function SendScreen({ vault, balance, onBack }: { vault: Vault; balance: BalanceResult | null; onBack: () => void }) {
   const [step, setStep] = useState<SendStep>("input");
   const [tokens, setTokens] = useState<WalletToken[]>([{ address: "", symbol: "ETH", decimals: 18, balance: "0", logo: "/eth.png" }]);
   const [token, setToken] = useState("");
+  const [showAddToken, setShowAddToken] = useState(false);
   const [amountMode, setAmountMode] = useState<"token" | "usd">("token");
   const [amountRaw, setAmountRaw] = useState("");
   const [to, setTo] = useState("");
@@ -556,6 +648,17 @@ function SendScreen({ vault, balance, onBack }: { vault: Vault; balance: Balance
 
   return (
     <div className="screen send-screen">
+      {showAddToken && (
+        <AddTokenModal
+          walletAddress={vault.address}
+          onAdd={(tok) => {
+            setTokens(prev => prev.find(t => t.address === tok.address) ? prev : [...prev, tok]);
+            setToken(tok.address);
+            setAmountRaw("");
+          }}
+          onClose={() => setShowAddToken(false)}
+        />
+      )}
       <button className="back" onClick={onBack}>← Back</button>
 
       <div className="field">
@@ -563,7 +666,12 @@ function SendScreen({ vault, balance, onBack }: { vault: Vault; balance: Balance
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
           Token
         </label>
-        <TokenSelector value={token} onChange={(v) => { setToken(v); setAmountRaw(""); }} tokens={tokens} />
+        <div className="token-field-row">
+          <TokenSelector value={token} onChange={(v) => { setToken(v); setAmountRaw(""); }} tokens={tokens} />
+          <button className="add-token-btn" onClick={() => setShowAddToken(true)} aria-label="Add token">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
+        </div>
       </div>
 
       <div className="amount-wrap" onClick={() => amountRef.current?.focus()}>

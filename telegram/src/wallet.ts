@@ -214,8 +214,40 @@ const ERC20_ABI = [
 
 const TRANSFER_SIG = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 
+export function loadCustomTokenAddresses(walletAddress: string): string[] {
+  try {
+    const raw = localStorage.getItem(`marmo_ctok_${walletAddress.toLowerCase()}`);
+    return raw ? (JSON.parse(raw) as string[]) : [];
+  } catch { return []; }
+}
+
+export function saveCustomTokenAddress(walletAddress: string, contractAddress: string): void {
+  const existing = loadCustomTokenAddresses(walletAddress);
+  const merged = [...new Set([...existing, contractAddress.toLowerCase()])];
+  localStorage.setItem(`marmo_ctok_${walletAddress.toLowerCase()}`, JSON.stringify(merged));
+}
+
+export async function fetchTokenByAddress(walletAddress: string, contractAddress: string): Promise<WalletToken> {
+  const addr = walletAddress as `0x${string}`;
+  const c = contractAddress.toLowerCase() as `0x${string}`;
+  const [bal, sym, dec] = await Promise.all([
+    publicClient.readContract({ address: c, abi: ERC20_ABI, functionName: "balanceOf", args: [addr] }),
+    publicClient.readContract({ address: c, abi: ERC20_ABI, functionName: "symbol" }),
+    publicClient.readContract({ address: c, abi: ERC20_ABI, functionName: "decimals" }),
+  ]);
+  const d = Number(dec);
+  return {
+    address: c,
+    symbol: sym as string,
+    decimals: d,
+    balance: parseFloat(formatUnits(bal as bigint, d)).toFixed(d > 6 ? 6 : d).replace(/\.?0+$/, "") || "0",
+    logo: TOKEN_LOGO_MAP[c] ?? "",
+  };
+}
+
 export async function fetchWalletTokens(address: string): Promise<WalletToken[]> {
   const addr = address as `0x${string}`;
+  const customAddresses = loadCustomTokenAddresses(address);
   const knownAddresses = new Set(BASE_TOKENS.map(t => t.address.toLowerCase()));
 
   const currentBlock = await publicClient.getBlockNumber();
@@ -266,7 +298,7 @@ export async function fetchWalletTokens(address: string): Promise<WalletToken[]>
     const discovered = (data.result ?? [])
       .map(l => l.address.toLowerCase())
       .filter(a => !knownAddresses.has(a));
-    const unique = [...new Set(discovered)];
+    const unique = [...new Set([...discovered, ...customAddresses.filter(a => !knownAddresses.has(a))])];
 
     const extra = await Promise.all(unique.map(async (contract) => {
       try {

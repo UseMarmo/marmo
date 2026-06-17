@@ -314,9 +314,97 @@ button, input, select, textarea { font-family: inherit; }
   word-break: break-all;
 }
 
+.token-field-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.token-field-row .token-selector { flex: 0 0 calc(80% - 0.25rem); }
+
+.add-token-btn {
+  flex: 0 0 calc(20% - 0.25rem);
+  display: grid;
+  place-items: center;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-brd);
+  border-radius: var(--radius-sm);
+  color: var(--blue-2);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  line-height: 0;
+}
+.add-token-btn:hover { background: var(--glass-bg-2); border-color: var(--blue); }
+.add-token-btn svg { display: block; }
+
 .token-selector {
   position: relative;
   width: 100%;
+}
+
+.modal-hint {
+  font-size: 0.83rem;
+  color: var(--muted);
+  line-height: 1.5;
+  margin-bottom: 1rem;
+}
+
+.ca-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.ca-input {
+  flex: 1;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.8rem;
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  outline: none;
+  min-width: 0;
+}
+.ca-input:focus { border-color: var(--blue); }
+
+.ca-paste-btn {
+  flex-shrink: 0;
+  padding: 0 1rem;
+  background: var(--glass-bg-2);
+  border: 1px solid var(--glass-brd);
+  border-radius: var(--radius-sm);
+  color: var(--blue-2);
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ca-paste-btn:hover { background: rgba(56, 182, 255, 0.12); }
+
+.ca-preview {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.9rem;
+  padding: 0.7rem 0.9rem;
+  background: rgba(61, 220, 138, 0.07);
+  border: 1px solid rgba(61, 220, 138, 0.22);
+  border-radius: var(--radius-sm);
+}
+
+.ca-preview__sym {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--ink);
+}
+
+.ca-preview__bal {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  color: var(--ok);
 }
 
 .token-selector__trigger {
