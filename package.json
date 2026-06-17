@@ -10,6 +10,7 @@
     "build:binary": "bun build --compile ./src/server.ts --outfile dist/marmo-core"
   },
   "dependencies": {
+    "@noble/curves": "^1.4.0",
     "hono": "^4.6.0",
     "postgres": "^3.4.5",
     "viem": "^2.21.0"

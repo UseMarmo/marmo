@@ -6,6 +6,8 @@ import { hexToBytes } from "viem";
 import { encryptSecret, decryptSecret, newApiKey, newId } from "./crypto.js";
 import { migrate } from "./db/migrate.js";
 import { pingStore, putShard, getShard, putWallet, getWallet, type WalletRecord } from "./store.js";
+import { computeStealthAddress, parseMetaAddress } from "./stealth.js";
+import { getAnnouncements, getLatestBlock, NETWORK } from "./chain.js";
 
 const VAULT_KEY = process.env.MARMO_VAULT_KEY ?? "dev-only-insecure-key";
 const PORT = Number(process.env.PORT ?? 8080);
@@ -24,13 +26,13 @@ function today(): string {
 }
 
 app.get("/", (c) =>
-  c.json({ service: "marmo-core", version: "0.2.0", network: "base-sepolia" })
+  c.json({ service: "marmo-core", version: "0.3.0", network: NETWORK })
 );
 
 app.get("/health", async (c) => {
   const db = await pingStore();
   return c.json(
-    { ok: db, service: "marmo-core", network: "base-sepolia", db: db ? "up" : "down" },
+    { ok: db, service: "marmo-core", network: NETWORK, db: db ? "up" : "down" },
     db ? 200 : 503
   );
 });
@@ -122,6 +124,56 @@ app.post("/v1/wallets/:address/cosign", async (c) => {
   return c.json({ signature, signerAddress: account.address });
 });
 
+app.post("/v1/stealth/compute", async (c) => {
+  const body = await c.req.json().catch(() => null);
+  if (!body?.metaAddress) {
+    return c.json({ error: "metaAddress required" }, 400);
+  }
+  try {
+    const meta = parseMetaAddress(body.metaAddress as string);
+    const result = computeStealthAddress(meta);
+    return c.json(result);
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, 400);
+  }
+});
+
+app.get("/v1/wallets/:address/stealth/announcements", async (c) => {
+  const address = c.req.param("address").toLowerCase();
+  const wallet = await getWallet(address);
+  if (!wallet) return c.json({ error: "wallet not found" }, 404);
+
+  const auth = c.req.header("authorization") ?? "";
+  const provided = auth.replace(/^Bearer\s+/i, "");
+  if (!provided || hashKey(provided) !== wallet.apiKeyHash) {
+    return c.json({ error: "unauthorized" }, 401);
+  }
+
+  const fromBlockRaw = c.req.query("fromBlock");
+  const toBlockRaw = c.req.query("toBlock");
+
+  let fromBlock: bigint;
+  let toBlock: bigint;
+
+  try {
+    if (toBlockRaw) {
+      toBlock = BigInt(toBlockRaw);
+    } else {
+      toBlock = await getLatestBlock();
+    }
+    fromBlock = fromBlockRaw ? BigInt(fromBlockRaw) : toBlock - 5_000n;
+  } catch {
+    return c.json({ error: "fromBlock and toBlock must be integers" }, 400);
+  }
+
+  try {
+    const announcements = await getAnnouncements(fromBlock, toBlock);
+    return c.json({ fromBlock: fromBlock.toString(), toBlock: toBlock.toString(), announcements });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, 500);
+  }
+});
+
 async function enforceDailyLimit(wallet: WalletRecord, amountUsd: number): Promise<boolean> {
   const now = today();
   const spent = wallet.spentDate === now ? wallet.spentTodayUsd : 0;
@@ -131,4 +183,4 @@ async function enforceDailyLimit(wallet: WalletRecord, amountUsd: number): Promi
 }
 
 Bun.serve({ port: PORT, fetch: app.fetch });
-console.log(`marmo-core v0.2.0 listening on :${PORT} (Base)`);
+console.log(`marmo-core v0.3.0 listening on :${PORT} (${NETWORK})`);
