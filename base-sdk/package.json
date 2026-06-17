@@ -1,6 +1,6 @@
 {
   "name": "@usemarmo/base-sdk",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "2-of-3 threshold sharding primitives for building Marmo-style wallets on Base",
   "type": "module",
   "exports": {
