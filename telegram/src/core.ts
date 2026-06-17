@@ -152,3 +152,39 @@ export async function buildSwap(
   if (!res.ok) throw new Error(data.error ?? "Failed to build swap");
   return data;
 }
+
+export async function registerStealthMeta(
+  address: string,
+  apiKey: string,
+  metaAddress: string,
+  viewPrivKey: string,
+): Promise<void> {
+  const res = await coreFetch(`/v1/wallets/${address}/stealth/register`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({ metaAddress, viewPrivKey }),
+  });
+  const data = (await res.json().catch(() => ({}))) as { error?: string };
+  if (!res.ok) throw new Error(data.error ?? "Failed to register stealth meta-address");
+}
+
+export interface StealthScanResult {
+  scannedFrom: string;
+  scannedTo: string;
+  payments: Array<{
+    stealthAddress: string;
+    ephemeralPubKey: string;
+    viewTag: number;
+    blockNumber: string;
+    txHash: string;
+  }>;
+}
+
+export async function scanStealth(address: string, apiKey: string): Promise<StealthScanResult> {
+  const res = await coreFetch(`/v1/wallets/${address}/stealth/scan`, {
+    headers: { authorization: `Bearer ${apiKey}` },
+  });
+  const data = (await res.json().catch(() => ({}))) as StealthScanResult & { error?: string };
+  if (!res.ok) throw new Error(data.error ?? "Stealth scan failed");
+  return data;
+}

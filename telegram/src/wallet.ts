@@ -1,6 +1,6 @@
 import { secp256k1 } from "@noble/curves/secp256k1";
-import { createPublicClient, http, formatEther, formatUnits, bytesToHex, hexToBytes, encodeFunctionData } from "viem";
-import { generatePrivateKey, privateKeyToAddress, privateKeyToAccount } from "viem/accounts";
+import { createPublicClient, createWalletClient, http, formatEther, formatUnits, bytesToHex, hexToBytes, encodeFunctionData, keccak256, parseEther } from "viem";
+import { generatePrivateKey, privateKeyToAddress, privateKeyToAccount, publicKeyToAddress } from "viem/accounts";
 import { base } from "viem/chains";
 import * as core from "./core.js";
 
@@ -137,6 +137,94 @@ export function getStealthMetaAddress(vault: Vault): string {
   const spend = privKeyToCompressedPub(vault.spendPrivKey).slice(2);
   const view = privKeyToCompressedPub(vault.viewPrivKey).slice(2);
   return `0x${spend}${view}`;
+}
+
+export interface StealthPayment {
+  stealthAddress: string;
+  ephemeralPubKey: string;
+  viewTag: number;
+  blockNumber: string;
+  txHash: string;
+  stealthPrivKey: `0x${string}`;
+  ethBalance: string;
+}
+
+function numberToBytes32(n: bigint): Uint8Array {
+  return hexToBytes(`0x${n.toString(16).padStart(64, "0")}`);
+}
+
+export function checkAnnouncement(
+  ann: { ephemeralPubKey: string; stealthAddress: string; viewTag: number },
+  viewPrivKey: `0x${string}`,
+  spendPrivKey: `0x${string}`,
+): { matches: boolean; stealthPrivKey?: `0x${string}` } {
+  try {
+    const R = secp256k1.ProjectivePoint.fromHex(ann.ephemeralPubKey.replace(/^0x/, ""));
+    const S = R.multiply(BigInt(viewPrivKey));
+    const h = keccak256(bytesToHex(numberToBytes32(S.toAffine().x)));
+
+    if (parseInt(h.slice(2, 4), 16) !== ann.viewTag) return { matches: false };
+
+    const hBig = BigInt(h) % secp256k1.CURVE.n;
+    const spendPub = secp256k1.ProjectivePoint.fromPrivateKey(hexToBytes(spendPrivKey));
+    const stealthPub = spendPub.add(secp256k1.ProjectivePoint.BASE.multiply(hBig));
+    const derived = publicKeyToAddress(bytesToHex(stealthPub.toRawBytes(false)));
+
+    if (derived.toLowerCase() !== ann.stealthAddress.toLowerCase()) return { matches: false };
+
+    const stealthPrivBig = (BigInt(spendPrivKey) + hBig) % secp256k1.CURVE.n;
+    const stealthPrivKey = `0x${stealthPrivBig.toString(16).padStart(64, "0")}` as `0x${string}`;
+    return { matches: true, stealthPrivKey };
+  } catch { return { matches: false }; }
+}
+
+export async function registerStealth(vault: Vault): Promise<void> {
+  const cosignKey = privateKeyToAddress(vault.shardAPrivKey);
+  await core.registerStealthMeta(cosignKey, vault.apiKey, getStealthMetaAddress(vault), vault.viewPrivKey);
+}
+
+export async function scanStealthPayments(vault: Vault): Promise<StealthPayment[]> {
+  const cosignKey = privateKeyToAddress(vault.shardAPrivKey);
+  const raw = await core.scanStealth(cosignKey, vault.apiKey);
+
+  const matched: StealthPayment[] = [];
+  for (const ann of raw.payments) {
+    const result = checkAnnouncement(ann, vault.viewPrivKey, vault.spendPrivKey);
+    if (!result.matches || !result.stealthPrivKey) continue;
+
+    const ethRaw = await publicClient.getBalance({ address: ann.stealthAddress as `0x${string}` }).catch(() => 0n);
+    if (ethRaw === 0n) continue;
+
+    matched.push({
+      ...ann,
+      stealthPrivKey: result.stealthPrivKey,
+      ethBalance: parseFloat(formatEther(ethRaw)).toFixed(6).replace(/\.?0+$/, ""),
+    });
+  }
+  return matched;
+}
+
+export async function sweepStealthPayment(
+  stealthPrivKey: `0x${string}`,
+  stealthAddress: string,
+  toAddress: string,
+): Promise<string> {
+  const account = privateKeyToAccount(stealthPrivKey);
+  const walletClient = createWalletClient({ account, chain: base, transport: http() });
+
+  const ethRaw = await publicClient.getBalance({ address: stealthAddress as `0x${string}` });
+  const gasPrice = await publicClient.getGasPrice();
+  const gasLimit = 21_000n;
+  const gasCost = gasPrice * gasLimit;
+
+  if (ethRaw <= gasCost) throw new Error("Insufficient ETH to cover gas for sweep");
+
+  const hash = await walletClient.sendTransaction({
+    to: toAddress as `0x${string}`,
+    value: ethRaw - gasCost,
+    gas: gasLimit,
+  });
+  return hash;
 }
 
 async function resolveAddress(

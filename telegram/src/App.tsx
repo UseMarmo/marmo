@@ -13,9 +13,13 @@ import {
   fetchTokenByAddress,
   saveCustomTokenAddress,
   shortAddress,
+  registerStealth,
+  scanStealthPayments,
+  sweepStealthPayment,
   type Vault,
   type BalanceResult,
   type WalletToken,
+  type StealthPayment,
 } from "./wallet.js";
 import * as core from "./core.js";
 
@@ -385,6 +389,14 @@ function DashboardScreen({
 }
 
 function ReceiveScreen({ vault, onBack }: { vault: Vault; onBack: () => void }) {
+  const [tab, setTab] = useState<"standard" | "private">("standard");
+  const [scanning, setScanning] = useState(false);
+  const [payments, setPayments] = useState<StealthPayment[] | null>(null);
+  const [scanErr, setScanErr] = useState("");
+  const [sweeping, setSweeping] = useState<string | null>(null);
+  const [sweepResult, setSweepResult] = useState<Record<string, { ok: boolean; hash?: string; err?: string }>>({});
+  const [registered, setRegistered] = useState(false);
+
   const meta = getStealthMetaAddress(vault);
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(vault.address)}&color=e9f0f8&bgcolor=141b24&margin=10&qzone=1`;
 
@@ -398,39 +410,134 @@ function ReceiveScreen({ vault, onBack }: { vault: Vault; onBack: () => void }) 
     haptic("success");
   }
 
+  async function scan() {
+    setScanning(true);
+    setScanErr("");
+    setPayments(null);
+    try {
+      if (!registered) {
+        await registerStealth(vault);
+        setRegistered(true);
+      }
+      const found = await scanStealthPayments(vault);
+      setPayments(found);
+    } catch (e) {
+      setScanErr(errMsg(e));
+    } finally {
+      setScanning(false);
+    }
+  }
+
+  async function sweep(p: StealthPayment) {
+    setSweeping(p.stealthAddress);
+    try {
+      const hash = await sweepStealthPayment(p.stealthPrivKey, p.stealthAddress, vault.address);
+      haptic("success");
+      setSweepResult(r => ({ ...r, [p.stealthAddress]: { ok: true, hash } }));
+    } catch (e) {
+      haptic("error");
+      setSweepResult(r => ({ ...r, [p.stealthAddress]: { ok: false, err: errMsg(e) } }));
+    } finally {
+      setSweeping(null);
+    }
+  }
+
   return (
     <div className="screen send-screen">
       <button className="back" onClick={onBack}>← Back</button>
       <h2 className="title title--sm">Receive</h2>
 
-      <div className="qr-wrap">
-        <img src={qrUrl} width={220} height={220} alt="Wallet address QR code" className="qr-img" />
-        <button className="qr-addr" onClick={copyAddress}>
-          {shortAddress(vault.address)} <CopyIcon />
+      <div className="receive-tabs">
+        <button className={`receive-tab${tab === "standard" ? " active" : ""}`} onClick={() => setTab("standard")}>Standard</button>
+        <button className={`receive-tab${tab === "private" ? " active" : ""}`} onClick={() => setTab("private")}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{marginRight:"0.3rem"}}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          Private
         </button>
       </div>
 
-      <div className="net-warn">
-        <div className="net-warn__row">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-          <span>Only send assets on the <strong>Base network</strong> to this address. Assets sent from another network may be permanently lost.</span>
-        </div>
-        <div className="net-warn__support">
-          For support contact{" "}
-          <a href="mailto:contact@usemarmo.xyz" className="net-warn__email">
-            contact@usemarmo.xyz
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17L17 7"/><path d="M7 7h10v10"/></svg>
-          </a>
-        </div>
-      </div>
+      {tab === "standard" && (
+        <>
+          <div className="qr-wrap">
+            <img src={qrUrl} width={220} height={220} alt="Wallet address QR code" className="qr-img" />
+            <button className="qr-addr" onClick={copyAddress}>
+              {shortAddress(vault.address)} <CopyIcon />
+            </button>
+          </div>
 
-      <div className="field">
-        <label>Stealth meta-address</label>
-        <textarea className="field__textarea" readOnly value={meta} rows={4} />
-      </div>
-      <button className="btn btn--ghost" onClick={copyMeta}>
-        <CopyIcon /> Copy meta-address
-      </button>
+          <div className="net-warn">
+            <div className="net-warn__row">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              <span>Only send assets on the <strong>Base network</strong> to this address.</span>
+            </div>
+          </div>
+        </>
+      )}
+
+      {tab === "private" && (
+        <>
+          <div className="stealth-explain">
+            <p>Share your stealth meta-address so senders can pay you privately. Each payment lands at a unique one-time address — only you can detect and claim it.</p>
+          </div>
+
+          <div className="stealth-meta-card">
+            <div className="stealth-meta-card__label">Your stealth meta-address</div>
+            <div className="stealth-meta-card__addr">{meta.slice(0, 20)}…{meta.slice(-10)}</div>
+            <button className="btn btn--ghost" onClick={copyMeta} style={{ marginTop: "0.75rem", width: "100%" }}>
+              <CopyIcon /> Copy full meta-address
+            </button>
+          </div>
+
+          <div className="stealth-scan-section">
+            <div className="stealth-scan-section__header">
+              <span className="stealth-scan-section__title">Incoming private payments</span>
+              <button className="btn btn--ghost stealth-scan-btn" onClick={scan} disabled={scanning}>
+                {scanning
+                  ? <><svg className="swap-fetching__spinner" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg> Scanning…</>
+                  : "Scan"}
+              </button>
+            </div>
+
+            {scanErr && <p className="err">{scanErr}</p>}
+
+            {payments !== null && payments.length === 0 && (
+              <p className="stealth-scan-empty">No private payments found in the last ~50k blocks.</p>
+            )}
+
+            {payments && payments.length > 0 && (
+              <div className="stealth-payment-list">
+                {payments.map(p => {
+                  const result = sweepResult[p.stealthAddress];
+                  return (
+                    <div key={p.stealthAddress} className="stealth-payment">
+                      <div className="stealth-payment__row">
+                        <div className="stealth-payment__info">
+                          <span className="stealth-payment__eth">{p.ethBalance} ETH</span>
+                          <span className="stealth-payment__addr">{shortAddress(p.stealthAddress)}</span>
+                        </div>
+                        {!result && (
+                          <button
+                            className="btn btn--primary stealth-payment__sweep"
+                            onClick={() => sweep(p)}
+                            disabled={sweeping === p.stealthAddress}
+                          >
+                            {sweeping === p.stealthAddress ? "Sweeping…" : "Sweep"}
+                          </button>
+                        )}
+                      </div>
+                      {result?.ok && (
+                        <a className="stealth-payment__tx" href={`https://basescan.org/tx/${result.hash}`} target="_blank" rel="noopener">
+                          Swept ✓ — view on Basescan ↗
+                        </a>
+                      )}
+                      {result && !result.ok && <p className="err" style={{marginTop:"0.4rem"}}>{result.err}</p>}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }

@@ -12,6 +12,8 @@ export interface WalletRecord {
   apiKeyHash: string;
   shardAAddress: string;
   shardCAddress: string;
+  stealthMetaAddress?: string;
+  encViewPriv?: string;
   createdAt: string;
 }
 
@@ -50,9 +52,18 @@ export async function putWallet(record: WalletRecord): Promise<void> {
       set api_key_hash = excluded.api_key_hash`;
 }
 
+export async function putStealthMeta(address: string, stealthMetaAddress: string, encViewPriv: string): Promise<void> {
+  await sql`
+    update marmo_wallets
+       set stealth_meta_address = ${stealthMetaAddress},
+           enc_view_priv = ${encViewPriv}
+     where address = ${address}`;
+}
+
 export async function getWallet(address: string): Promise<WalletRecord | undefined> {
   const rows = await sql`
-    select address, shard_id, api_key_hash, shard_a_address, shard_c_address, created_at
+    select address, shard_id, api_key_hash, shard_a_address, shard_c_address,
+           stealth_meta_address, enc_view_priv, created_at
     from marmo_wallets where address = ${address}`;
   const row = rows[0];
   if (!row) return undefined;
@@ -62,6 +73,8 @@ export async function getWallet(address: string): Promise<WalletRecord | undefin
     apiKeyHash: row.api_key_hash,
     shardAAddress: row.shard_a_address,
     shardCAddress: row.shard_c_address,
+    stealthMetaAddress: row.stealth_meta_address ?? undefined,
+    encViewPriv: row.enc_view_priv ?? undefined,
     createdAt: row.created_at,
   };
 }

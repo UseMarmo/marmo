@@ -576,6 +576,107 @@ button, input, select, textarea { font-family: inherit; }
   white-space: nowrap;
 }
 
+.receive-tabs {
+  display: flex;
+  gap: 0.4rem;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-brd);
+  border-radius: var(--radius-sm);
+  padding: 0.25rem;
+}
+.receive-tab {
+  flex: 1;
+  padding: 0.45rem 0;
+  font-size: 0.82rem;
+  font-weight: 500;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  color: var(--ink-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.14s, color 0.14s;
+}
+.receive-tab.active {
+  background: var(--glass-bg-2);
+  color: var(--ink);
+}
+
+.stealth-explain {
+  font-size: 0.82rem;
+  color: var(--ink-muted);
+  line-height: 1.55;
+}
+.stealth-meta-card {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-brd);
+  border-radius: var(--radius);
+  padding: 1rem;
+}
+.stealth-meta-card__label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-muted);
+  margin-bottom: 0.5rem;
+}
+.stealth-meta-card__addr {
+  font-family: monospace;
+  font-size: 0.82rem;
+  color: var(--ink);
+  word-break: break-all;
+}
+
+.stealth-scan-section { display: flex; flex-direction: column; gap: 0.75rem; }
+.stealth-scan-section__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.stealth-scan-section__title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+.stealth-scan-btn {
+  padding: 0.3rem 0.9rem;
+  font-size: 0.78rem;
+  height: auto;
+}
+.stealth-scan-empty {
+  font-size: 0.8rem;
+  color: var(--ink-muted);
+  text-align: center;
+  padding: 1.2rem 0;
+}
+.stealth-payment-list { display: flex; flex-direction: column; gap: 0.6rem; }
+.stealth-payment {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-brd);
+  border-radius: var(--radius-sm);
+  padding: 0.85rem 1rem;
+}
+.stealth-payment__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.stealth-payment__info { display: flex; flex-direction: column; gap: 0.2rem; }
+.stealth-payment__eth { font-size: 0.95rem; font-weight: 600; }
+.stealth-payment__addr { font-size: 0.72rem; color: var(--ink-muted); font-family: monospace; }
+.stealth-payment__sweep { padding: 0.35rem 0.9rem; font-size: 0.8rem; height: auto; flex-shrink: 0; }
+.stealth-payment__tx {
+  display: block;
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--blue-2);
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
 .token-tabs {
   display: flex;
   gap: 0.5rem;

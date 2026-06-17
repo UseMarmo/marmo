@@ -52,6 +52,28 @@ export function computeStealthAddress(meta: StealthMetaAddress): StealthResult {
   return { stealthAddress, ephemeralPubKey, viewTag };
 }
 
+export function checkAnnouncement(
+  ann: { ephemeralPubKey: string; stealthAddress: string; viewTag: number },
+  viewPrivKey: `0x${string}`,
+  spendPub: `0x${string}`,
+): boolean {
+  try {
+    const R = secp256k1.ProjectivePoint.fromHex(ann.ephemeralPubKey.replace(/^0x/, ""));
+    const S = R.multiply(BigInt(viewPrivKey));
+    const SxBytes = numberToBytes32(S.toAffine().x);
+    const h = keccak256(bytesToHex(SxBytes));
+
+    if (parseInt(h.slice(2, 4), 16) !== ann.viewTag) return false;
+
+    const hBig = BigInt(h) % secp256k1.CURVE.n;
+    const P = secp256k1.ProjectivePoint.fromHex(spendPub.replace(/^0x/, ""));
+    const stealthPub = P.add(secp256k1.ProjectivePoint.BASE.multiply(hBig));
+    const derived = publicKeyToAddress(bytesToHex(stealthPub.toRawBytes(false)));
+
+    return derived.toLowerCase() === ann.stealthAddress.toLowerCase();
+  } catch { return false; }
+}
+
 function numberToBytes32(n: bigint): Uint8Array {
   return hexToBytes(`0x${n.toString(16).padStart(64, "0")}`);
 }

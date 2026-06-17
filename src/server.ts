@@ -5,8 +5,8 @@ import { generatePrivateKey, privateKeyToAddress, privateKeyToAccount } from "vi
 import { hexToBytes } from "viem";
 import { encryptSecret, decryptSecret, newApiKey, newId } from "./crypto.js";
 import { migrate } from "./db/migrate.js";
-import { pingStore, putShard, getShard, putWallet, getWallet, type WalletRecord } from "./store.js";
-import { computeStealthAddress, parseMetaAddress } from "./stealth.js";
+import { pingStore, putShard, getShard, putWallet, getWallet, putStealthMeta, type WalletRecord } from "./store.js";
+import { computeStealthAddress, parseMetaAddress, checkAnnouncement } from "./stealth.js";
 import { getAnnouncements, getLatestBlock, NETWORK } from "./chain.js";
 import { quoteExactIn, buildSwapCalldata, listTokens } from "./swap.js";
 import { buildSendCalldata, buildStealthSendCalldata } from "./send.js";
@@ -336,6 +336,90 @@ app.get("/v1/wallets/:address/stealth/announcements", async (c) => {
   try {
     const announcements = await getAnnouncements(fromBlock, toBlock);
     return c.json({ fromBlock: fromBlock.toString(), toBlock: toBlock.toString(), announcements });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, 500);
+  }
+});
+
+app.post("/v1/wallets/:address/stealth/register", async (c) => {
+  const address = c.req.param("address").toLowerCase();
+  const wallet = await getWallet(address);
+  if (!wallet) return c.json({ error: "wallet not found" }, 404);
+
+  const auth = c.req.header("authorization") ?? "";
+  const provided = auth.replace(/^Bearer\s+/i, "");
+  if (!provided || hashKey(provided) !== wallet.apiKeyHash) {
+    return c.json({ error: "unauthorized" }, 401);
+  }
+
+  const body = await c.req.json().catch(() => null);
+  if (!body?.metaAddress || !body?.viewPrivKey) {
+    return c.json({ error: "metaAddress and viewPrivKey are required" }, 400);
+  }
+
+  const metaHex = (body.metaAddress as string).replace(/^0x/, "");
+  if (metaHex.length !== 132) {
+    return c.json({ error: "metaAddress must be 66 bytes (spendPub || viewPub)" }, 400);
+  }
+
+  await putStealthMeta(
+    address,
+    body.metaAddress as string,
+    encryptSecret(body.viewPrivKey as string, VAULT_KEY),
+  );
+
+  return c.json({ ok: true });
+});
+
+app.get("/v1/wallets/:address/stealth/scan", async (c) => {
+  const address = c.req.param("address").toLowerCase();
+  const wallet = await getWallet(address);
+  if (!wallet) return c.json({ error: "wallet not found" }, 404);
+
+  const auth = c.req.header("authorization") ?? "";
+  const provided = auth.replace(/^Bearer\s+/i, "");
+  if (!provided || hashKey(provided) !== wallet.apiKeyHash) {
+    return c.json({ error: "unauthorized" }, 401);
+  }
+
+  if (!wallet.stealthMetaAddress || !wallet.encViewPriv) {
+    return c.json({ error: "stealth not registered — call POST /stealth/register first" }, 400);
+  }
+
+  const metaHex = wallet.stealthMetaAddress.replace(/^0x/, "");
+  const spendPub = `0x${metaHex.slice(0, 66)}` as `0x${string}`;
+  const viewPrivKey = decryptSecret(wallet.encViewPriv, VAULT_KEY) as `0x${string}`;
+
+  const toBlock = await getLatestBlock();
+  const CHUNK = 10_000n;
+  const CHUNKS = 5n;
+  const fromBlock = toBlock > CHUNK * CHUNKS ? toBlock - CHUNK * CHUNKS : 0n;
+
+  const ranges: Array<[bigint, bigint]> = [];
+  for (let i = 0n; i < CHUNKS; i++) {
+    const start = fromBlock + i * CHUNK;
+    const end = start + CHUNK - 1n < toBlock ? start + CHUNK - 1n : toBlock;
+    if (start > toBlock) break;
+    ranges.push([start, end]);
+  }
+
+  try {
+    const chunks = await Promise.all(ranges.map(([f, t]) => getAnnouncements(f, t).catch(() => [])));
+    const all = chunks.flat();
+
+    const matched = all.filter(ann => checkAnnouncement(ann, viewPrivKey, spendPub));
+
+    return c.json({
+      scannedFrom: fromBlock.toString(),
+      scannedTo: toBlock.toString(),
+      payments: matched.map(ann => ({
+        stealthAddress: ann.stealthAddress,
+        ephemeralPubKey: ann.ephemeralPubKey,
+        viewTag: ann.viewTag,
+        blockNumber: ann.blockNumber,
+        txHash: ann.txHash,
+      })),
+    });
   } catch (e) {
     return c.json({ error: (e as Error).message }, 500);
   }
