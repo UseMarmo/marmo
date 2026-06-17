@@ -43,7 +43,7 @@ marmo/
   db/migrations/    Postgres schema migrations
   contract/         ERC-4337 smart contracts (Hardhat, Solidity 0.8.28)
   desktop/          Desktop wallet (Tauri v2, Vite, TypeScript)
-  base-sdk/         @usemarmo/base-sdk (coming soon)
+  base-sdk/         @usemarmo/base-sdk
 ```
 
 Each sub-project has its own `package.json`, lockfile, and CI workflow.
