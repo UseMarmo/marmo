@@ -371,17 +371,20 @@ button, input, select, textarea { font-family: inherit; }
 
 .ca-paste-btn {
   flex-shrink: 0;
-  width: 38px;
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0 0.85rem;
   background: var(--glass-bg-2);
   border: 1px solid var(--glass-brd);
   border-radius: var(--radius-sm);
   color: var(--blue-2);
+  font-size: 0.82rem;
+  font-weight: 500;
   cursor: pointer;
-  line-height: 0;
+  white-space: nowrap;
 }
-.ca-paste-btn svg { display: block; }
+.ca-paste-btn svg { display: block; flex-shrink: 0; }
 .ca-paste-btn:hover { background: rgba(56, 182, 255, 0.12); border-color: var(--blue); }
 
 .ca-preview {

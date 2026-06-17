@@ -482,8 +482,9 @@ function AddTokenModal({ walletAddress, onAdd, onClose }: {
             autoComplete="off"
             spellCheck={false}
           />
-          <button className="ca-paste-btn" onClick={paste} aria-label="Paste">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="2" width="6" height="4" rx="1"/><rect x="5" y="6" width="14" height="16" rx="2"/><path d="M9 2H7a2 2 0 0 0-2 2v2"/><path d="M15 2h2a2 2 0 0 1 2 2v2"/></svg>
+          <button className="ca-paste-btn" onClick={paste}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="2" width="6" height="4" rx="1"/><rect x="5" y="6" width="14" height="16" rx="2"/><path d="M9 2H7a2 2 0 0 0-2 2v2"/><path d="M15 2h2a2 2 0 0 1 2 2v2"/></svg>
+            Paste
           </button>
         </div>
         {err && <p className="err" style={{ marginTop: "0.6rem" }}>{err}</p>}
