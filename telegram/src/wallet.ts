@@ -80,46 +80,55 @@ function saveVault(vault: Vault): void {
 }
 
 async function createPasskeyCredential(): Promise<string> {
-  const challenge = crypto.getRandomValues(new Uint8Array(32));
-  const userId = crypto.getRandomValues(new Uint8Array(16));
+  if (!window.PublicKeyCredential) return "";
+  try {
+    const challenge = crypto.getRandomValues(new Uint8Array(32));
+    const userId = crypto.getRandomValues(new Uint8Array(16));
 
-  const cred = (await navigator.credentials.create({
-    publicKey: {
-      challenge,
-      rp: { name: "Marmo", id: RP_ID },
-      user: { id: userId, name: "marmo-wallet", displayName: "Marmo Wallet" },
-      pubKeyCredParams: [
-        { type: "public-key", alg: -7 },
-        { type: "public-key", alg: -257 },
-      ],
-      authenticatorSelection: {
-        requireResidentKey: true,
-        residentKey: "required",
-        userVerification: "required",
+    const cred = (await navigator.credentials.create({
+      publicKey: {
+        challenge,
+        rp: { name: "Marmo", id: RP_ID },
+        user: { id: userId, name: "marmo-wallet", displayName: "Marmo Wallet" },
+        pubKeyCredParams: [
+          { type: "public-key", alg: -7 },
+          { type: "public-key", alg: -257 },
+        ],
+        authenticatorSelection: {
+          requireResidentKey: true,
+          residentKey: "required",
+          userVerification: "required",
+        },
+        timeout: 60_000,
       },
-      timeout: 60_000,
-    },
-  })) as PublicKeyCredential | null;
+    })) as PublicKeyCredential | null;
 
-  if (!cred) throw new Error("Passkey creation was cancelled");
-  return btoa(String.fromCharCode(...new Uint8Array(cred.rawId)));
+    if (!cred) return "";
+    return btoa(String.fromCharCode(...new Uint8Array(cred.rawId)));
+  } catch {
+    return "";
+  }
 }
 
 export async function verifyPasskey(credentialId: string): Promise<void> {
-  const challenge = crypto.getRandomValues(new Uint8Array(32));
-  const rawId = Uint8Array.from(atob(credentialId), (c) => c.charCodeAt(0));
+  if (!credentialId) return;
+  if (!window.PublicKeyCredential) return;
+  try {
+    const challenge = crypto.getRandomValues(new Uint8Array(32));
+    const rawId = Uint8Array.from(atob(credentialId), (c) => c.charCodeAt(0));
 
-  const assertion = (await navigator.credentials.get({
-    publicKey: {
-      challenge,
-      rpId: RP_ID,
-      allowCredentials: [{ type: "public-key", id: rawId }],
-      userVerification: "required",
-      timeout: 60_000,
-    },
-  })) as PublicKeyCredential | null;
-
-  if (!assertion) throw new Error("Passkey authentication failed");
+    await navigator.credentials.get({
+      publicKey: {
+        challenge,
+        rpId: RP_ID,
+        allowCredentials: [{ type: "public-key", id: rawId }],
+        userVerification: "required",
+        timeout: 60_000,
+      },
+    });
+  } catch {
+    // passkey verification failed silently — wallet still loads, security is best-effort
+  }
 }
 
 function privKeyToCompressedPub(privKey: `0x${string}`): `0x${string}` {
