@@ -874,6 +874,17 @@ function SwapTokenModal({
       .finally(() => setLooking(false));
   }, [search, walletAddress]);
 
+  function paste() {
+    const apply = (text: string | null) => {
+      const val = text?.trim() ?? "";
+      if (val) setSearch(val);
+    };
+    navigator.clipboard.readText().then(apply).catch(() => {
+      const tg = (window as { Telegram?: { WebApp?: { readTextFromClipboard?: (cb: (t: string | null) => void) => void } } }).Telegram?.WebApp;
+      if (tg?.readTextFromClipboard) tg.readTextFromClipboard(apply);
+    });
+  }
+
   const base = SWAP_TOKENS.filter(t =>
     t.address !== exclude &&
     (t.symbol.toLowerCase().includes(search.toLowerCase()) || t.address.toLowerCase().includes(search.toLowerCase()))
@@ -882,30 +893,48 @@ function SwapTokenModal({
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal swap-modal" onClick={e => e.stopPropagation()}>
+      <div className="modal-panel" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
-          <span className="modal-header__title">Select token</span>
-          <button className="modal-close" onClick={onClose}>✕</button>
+          <span className="modal-title">Select token</span>
+          <button className="modal-close" onClick={onClose}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
         </div>
-        <input
-          className="modal-search"
-          placeholder="Search symbol or paste contract address"
-          value={search}
-          autoFocus
-          onChange={e => setSearch(e.target.value)}
-        />
-        {looking && <p className="modal-hint">Looking up token…</p>}
+
+        <div className="ca-row">
+          <input
+            className="ca-input"
+            placeholder="Search or paste contract address"
+            value={search}
+            autoFocus
+            style={{ fontSize: "16px" }}
+            autoComplete="off"
+            spellCheck={false}
+            onChange={e => setSearch(e.target.value)}
+            onPaste={e => {
+              const text = e.clipboardData.getData("text").trim();
+              if (text) { e.preventDefault(); setSearch(text); }
+            }}
+          />
+          <button className="ca-paste-btn" onClick={paste}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="2" width="6" height="4" rx="1"/><rect x="5" y="6" width="14" height="16" rx="2"/><path d="M9 2H7a2 2 0 0 0-2 2v2"/><path d="M15 2h2a2 2 0 0 1 2 2v2"/></svg>
+            Paste
+          </button>
+        </div>
+
+        {looking && <p className="modal-hint" style={{ marginTop: "0.75rem" }}>Looking up token…</p>}
+
         <div className="swap-token-list">
           {list.map(t => (
             <button key={t.address} className="swap-token-item" onClick={() => { onSelect(t); onClose(); }}>
-              <SwapTokenLogo logo={t.logo} symbol={t.symbol} size={32} />
+              <SwapTokenLogo logo={t.logo} symbol={t.symbol} size={36} />
               <div className="swap-token-item__info">
                 <span className="swap-token-item__sym">{t.symbol}</span>
                 <span className="swap-token-item__addr">{t.address.slice(0, 6)}…{t.address.slice(-4)}</span>
               </div>
             </button>
           ))}
-          {list.length === 0 && !looking && <p className="modal-hint">No results.</p>}
+          {list.length === 0 && !looking && <p className="modal-hint" style={{ marginTop: "0.75rem" }}>No tokens found.</p>}
         </div>
       </div>
     </div>
