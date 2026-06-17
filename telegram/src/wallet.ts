@@ -371,6 +371,47 @@ function packBytes32(hi: bigint, lo: bigint): `0x${string}` {
   return `0x${hi.toString(16).padStart(32, "0")}${lo.toString(16).padStart(32, "0")}` as `0x${string}`;
 }
 
+async function pimlicoGasPrice(): Promise<{ maxFeePerGas: bigint; maxPriorityFeePerGas: bigint }> {
+  const res = await fetch(BUNDLER_URL, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "pimlico_getUserOperationGasPrice", params: [] }),
+  });
+  const data = await res.json() as {
+    result: { fast: { maxFeePerGas: string; maxPriorityFeePerGas: string } };
+  };
+  return {
+    maxFeePerGas: BigInt(data.result.fast.maxFeePerGas),
+    maxPriorityFeePerGas: BigInt(data.result.fast.maxPriorityFeePerGas),
+  };
+}
+
+async function pimlicoEstimateGas(userOp: Record<string, unknown>): Promise<{
+  callGasLimit: bigint;
+  verificationGasLimit: bigint;
+  preVerificationGas: bigint;
+}> {
+  const res = await fetch(BUNDLER_URL, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      jsonrpc: "2.0", id: 2,
+      method: "eth_estimateUserOperationGas",
+      params: [userOp, ENTRY_POINT],
+    }),
+  });
+  const data = await res.json() as {
+    result?: { callGasLimit: string; verificationGasLimit: string; preVerificationGas: string };
+    error?: { message: string };
+  };
+  if (!data.result) throw new Error(data.error?.message ?? "Gas estimation failed");
+  return {
+    callGasLimit: BigInt(data.result.callGasLimit),
+    verificationGasLimit: BigInt(data.result.verificationGasLimit),
+    preVerificationGas: BigInt(data.result.preVerificationGas),
+  };
+}
+
 export async function buildAndSubmit(
   vault: Vault,
   callData: `0x${string}`,
@@ -381,14 +422,14 @@ export async function buildAndSubmit(
   const sender = vault.address as `0x${string}`;
   const shardAAddress = privateKeyToAddress(vault.shardAPrivKey);
 
-  const [nonce, feeData] = await Promise.all([
+  const [nonce, { maxFeePerGas, maxPriorityFeePerGas }] = await Promise.all([
     publicClient.readContract({
       address: ENTRY_POINT,
       abi: EP_ABI,
       functionName: "getNonce",
       args: [sender, 0n],
     }) as Promise<bigint>,
-    publicClient.estimateFeesPerGas(),
+    pimlicoGasPrice(),
   ]);
 
   let isDeployed = false;
@@ -417,11 +458,34 @@ export async function buildAndSubmit(
     });
   }
 
-  const verificationGasLimit = isDeployed ? 200_000n : 1_200_000n;
-  const callGasLimit = isDeployed ? (value > 0n ? 100_000n : 150_000n) : 250_000n;
-  const preVerificationGas = 80_000n;
-  const maxFeePerGas = feeData.maxFeePerGas ?? 2_000_000n;
-  const maxPriorityFeePerGas = feeData.maxPriorityFeePerGas ?? 1_000_000n;
+  const hex = (n: bigint) => `0x${n.toString(16)}`;
+
+  const dummySig = `0x${"ec".repeat(65)}${"ec".repeat(65)}` as `0x${string}`;
+  const estOp = {
+    sender,
+    nonce: hex(nonce),
+    factory: factory ?? null,
+    factoryData: factoryData ?? "0x",
+    callData,
+    maxFeePerGas: hex(maxFeePerGas),
+    maxPriorityFeePerGas: hex(maxPriorityFeePerGas),
+    signature: dummySig,
+  };
+
+  let verificationGasLimit: bigint;
+  let callGasLimit: bigint;
+  let preVerificationGas: bigint;
+
+  try {
+    const est = await pimlicoEstimateGas(estOp);
+    verificationGasLimit = est.verificationGasLimit * 12n / 10n;
+    callGasLimit = est.callGasLimit * 12n / 10n;
+    preVerificationGas = est.preVerificationGas * 12n / 10n;
+  } catch {
+    verificationGasLimit = isDeployed ? 300_000n : 1_500_000n;
+    callGasLimit = isDeployed ? 200_000n : 300_000n;
+    preVerificationGas = 100_000n;
+  }
 
   const initCode = factory
     ? (`0x${factory.slice(2)}${(factoryData ?? "0x").slice(2)}` as `0x${string}`)
@@ -456,7 +520,6 @@ export async function buildAndSubmit(
   const sigB = await core.cosign(cosignKey, vault.apiKey, userOpHash);
   const signature = `0x${sigA.slice(2)}${sigB.slice(2)}` as `0x${string}`;
 
-  const hex = (n: bigint) => `0x${n.toString(16)}`;
   const unpackedUserOp = {
     sender,
     nonce: hex(nonce),

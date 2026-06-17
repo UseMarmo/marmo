@@ -673,7 +673,12 @@ function SendScreen({ vault, balance, onBack }: { vault: Vault; balance: Balance
             </a>
           </>
         ) : (
-          <p className="tx-result__err">{txResult.message}</p>
+          <>
+            <p className="tx-result__err">{txResult.message}</p>
+            <button className="btn btn--primary" onClick={submit} disabled={loading}>
+              {loading ? "Retrying…" : "Try Again"}
+            </button>
+          </>
         )}
 
         <button className="btn btn--ghost" onClick={onBack}>Close</button>
