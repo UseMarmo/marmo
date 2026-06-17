@@ -13,7 +13,7 @@ on:
 
 jobs:
   build:
-    name: Build
+    name: Build and Deploy
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,9 +22,12 @@ jobs:
         working-directory: telegram
       - run: bun run build
         working-directory: telegram
-      - uses: actions/upload-artifact@v4
+        env:
+          VITE_BUNDLER_URL: ${{ secrets.VITE_BUNDLER_URL }}
+      - name: Deploy to Cloudflare Workers
         if: github.ref == 'refs/heads/main'
-        with:
-          name: telegram-dist
-          path: telegram/dist/
-          retention-days: 7
+        run: bun run deploy
+        working-directory: telegram
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

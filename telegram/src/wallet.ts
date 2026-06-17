@@ -10,7 +10,7 @@ const FACTORY_ADDRESS = "0xCb3351F23174a53a5D30b06c0C985dCd4256432d" as const;
 const BUNDLER_URL = import.meta.env.VITE_BUNDLER_URL ?? "";
 const RP_ID = import.meta.env.VITE_RP_ID ?? "localhost";
 
-const VAULT_KEY = "marmo_vault_v1";
+const VAULT_KEY = "marmo_vault_v2";
 
 const ERC20_ABI = [
   { name: "balanceOf", type: "function", stateMutability: "view",
