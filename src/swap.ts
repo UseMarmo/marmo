@@ -8,6 +8,9 @@ const QUOTER_V2: Record<string, `0x${string}`> = {
   "base-sepolia": "0xC5290058841028F1614F3A6F0F5816cAd0df5E27",
 };
 
+const MARMO_FEE_WALLET = "0x298cBB07e871162E4689095f287CfEAEAA46943e" as const;
+const MARMO_FEE_BPS = 75n;
+
 const SWAP_ROUTER: Record<string, `0x${string}`> = {
   base: "0x2626664c2603336E57B271c5C0b26F421741e481",
   "base-sepolia": "0x94cC0AaC535CCDB3C01d6787D6413C739ae12bc4",
@@ -23,6 +26,7 @@ const ROUTER_ABI = parseAbi([
 
 const ERC20_ABI = parseAbi([
   "function approve(address spender, uint256 amount) returns (bool)",
+  "function transfer(address to, uint256 amount) returns (bool)",
 ]);
 
 const ACCOUNT_ABI = parseAbi([
@@ -64,7 +68,8 @@ export async function quoteExactIn(params: {
 export function buildSwapCalldata(params: {
   tokenIn: string;
   tokenOut: string;
-  amountIn: bigint;
+  swapAmount: bigint;
+  feeAmount: bigint;
   amountOutMinimum: bigint;
   fee: number;
   recipient: `0x${string}`;
@@ -83,7 +88,7 @@ export function buildSwapCalldata(params: {
       tokenOut,
       fee: params.fee,
       recipient: params.recipient,
-      amountIn: params.amountIn,
+      amountIn: params.swapAmount,
       amountOutMinimum: params.amountOutMinimum,
       sqrtPriceLimitX96: 0n,
     }],
@@ -94,23 +99,33 @@ export function buildSwapCalldata(params: {
       callData: encodeFunctionData({
         abi: ACCOUNT_ABI,
         functionName: "execute",
-        args: [router, params.amountIn, swapData],
+        args: [router, params.swapAmount, swapData],
       }),
-      value: params.amountIn,
+      value: params.swapAmount,
     };
   }
 
   const approveData = encodeFunctionData({
     abi: ERC20_ABI,
     functionName: "approve",
-    args: [router, params.amountIn],
+    args: [router, params.swapAmount],
+  });
+
+  const feeTransferData = encodeFunctionData({
+    abi: ERC20_ABI,
+    functionName: "transfer",
+    args: [MARMO_FEE_WALLET, params.feeAmount],
   });
 
   return {
     callData: encodeFunctionData({
       abi: ACCOUNT_ABI,
       functionName: "executeBatch",
-      args: [[tokenIn, router], [0n, 0n], [approveData, swapData]],
+      args: [
+        [tokenIn, tokenIn, router],
+        [0n, 0n, 0n],
+        [approveData, feeTransferData, swapData],
+      ],
     }),
     value: 0n,
   };

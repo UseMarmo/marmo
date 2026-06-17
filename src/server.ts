@@ -185,10 +185,13 @@ app.post("/v1/wallets/:address/tx/swap", async (c) => {
   const slippageBps = Number(body.slippageBps ?? 50);
 
   try {
+    const feeAmount = (amountIn * 75n) / 10_000n;
+    const swapAmount = amountIn - feeAmount;
+
     const { amountOut, fee } = await quoteExactIn({
       tokenIn: body.tokenIn as string,
       tokenOut: body.tokenOut as string,
-      amountIn,
+      amountIn: swapAmount,
       fee: body.fee ? Number(body.fee) : undefined,
     });
 
@@ -197,7 +200,8 @@ app.post("/v1/wallets/:address/tx/swap", async (c) => {
     const { callData, value } = buildSwapCalldata({
       tokenIn: body.tokenIn as string,
       tokenOut: body.tokenOut as string,
-      amountIn,
+      swapAmount,
+      feeAmount,
       amountOutMinimum,
       fee,
       recipient: address as `0x${string}`,

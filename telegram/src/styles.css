@@ -912,13 +912,35 @@ button, input, select, textarea { font-family: inherit; }
   flex-shrink: 0;
 }
 .swap-flip-btn:hover { color: var(--ink); background: var(--glass-bg); }
-.swap-meta {
+.swap-fetching {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--ink-muted);
+  padding: 0 0.1rem;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+.swap-fetching__spinner { animation: spin 0.9s linear infinite; flex-shrink: 0; }
+
+.swap-fees {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.6rem 0.75rem;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-brd);
+  border-radius: var(--radius-sm);
+}
+.swap-fees__row {
   display: flex;
   justify-content: space-between;
   font-size: 0.78rem;
   color: var(--ink-muted);
-  padding: 0 0.2rem;
 }
+.swap-fees__row--rate { color: var(--ink); }
+.swap-fees__val { font-variant-numeric: tabular-nums; }
 
 .swap-token-list {
   display: flex;

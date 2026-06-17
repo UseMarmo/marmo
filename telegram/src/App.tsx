@@ -1096,18 +1096,33 @@ function SwapScreen({ vault, onBack }: { vault: Vault; onBack: () => void }) {
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M6 9l6 6 6-6"/></svg>
             </button>
             <div className="swap-amount-out">
-              {quoting
-                ? <span className="swap-amount-out__loading">…</span>
-                : outAmount || <span className="swap-amount-out__empty">—</span>}
+              {outAmount || <span className="swap-amount-out__empty">—</span>}
             </div>
           </div>
         </div>
       </div>
 
-      {quote && (
-        <div className="swap-meta">
-          <span>Fee tier: {quote.fee / 10000}%</span>
-          <span>1 {tokenIn.symbol} ≈ {(Number(BigInt(quote.amountOut)) / 10 ** tokenOut.decimals / parsed).toFixed(4)} {tokenOut.symbol}</span>
+      {quoting && (
+        <div className="swap-fetching">
+          <svg className="swap-fetching__spinner" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+          Fetching quote…
+        </div>
+      )}
+
+      {quote && !quoting && (
+        <div className="swap-fees">
+          <div className="swap-fees__row">
+            <span className="swap-fees__label">Marmo Privacy Fee</span>
+            <span className="swap-fees__val">0.75%</span>
+          </div>
+          <div className="swap-fees__row">
+            <span className="swap-fees__label">Uniswap Pool Fee</span>
+            <span className="swap-fees__val">{(quote.fee / 100).toFixed(2)}%</span>
+          </div>
+          <div className="swap-fees__row swap-fees__row--rate">
+            <span className="swap-fees__label">Rate</span>
+            <span className="swap-fees__val">1 {tokenIn.symbol} ≈ {(Number(BigInt(quote.amountOut)) / 10 ** tokenOut.decimals / parsed).toFixed(4)} {tokenOut.symbol}</span>
+          </div>
         </div>
       )}
 
