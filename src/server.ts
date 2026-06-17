@@ -8,6 +8,7 @@ import { migrate } from "./db/migrate.js";
 import { pingStore, putShard, getShard, putWallet, getWallet, type WalletRecord } from "./store.js";
 import { computeStealthAddress, parseMetaAddress } from "./stealth.js";
 import { getAnnouncements, getLatestBlock, NETWORK } from "./chain.js";
+import { quoteExactIn, buildSwapCalldata, listTokens } from "./swap.js";
 
 const VAULT_KEY = process.env.MARMO_VAULT_KEY ?? "dev-only-insecure-key";
 const PORT = Number(process.env.PORT ?? 8080);
@@ -26,7 +27,7 @@ function today(): string {
 }
 
 app.get("/", (c) =>
-  c.json({ service: "marmo-core", version: "0.3.0", network: NETWORK })
+  c.json({ service: "marmo-core", version: "0.4.0", network: NETWORK })
 );
 
 app.get("/health", async (c) => {
@@ -124,6 +125,96 @@ app.post("/v1/wallets/:address/cosign", async (c) => {
   return c.json({ signature, signerAddress: account.address });
 });
 
+app.get("/v1/quote", async (c) => {
+  const tokenIn = c.req.query("tokenIn");
+  const tokenOut = c.req.query("tokenOut");
+  const amountInRaw = c.req.query("amountIn");
+  const feeRaw = c.req.query("fee");
+
+  if (!tokenIn || !tokenOut || !amountInRaw) {
+    return c.json({ error: "tokenIn, tokenOut, amountIn are required" }, 400);
+  }
+
+  let amountIn: bigint;
+  try {
+    amountIn = BigInt(amountInRaw);
+  } catch {
+    return c.json({ error: "amountIn must be an integer (wei / smallest unit)" }, 400);
+  }
+
+  try {
+    const { amountOut, fee } = await quoteExactIn({
+      tokenIn,
+      tokenOut,
+      amountIn,
+      fee: feeRaw ? Number(feeRaw) : undefined,
+    });
+    return c.json({ tokenIn, tokenOut, amountIn: amountIn.toString(), amountOut: amountOut.toString(), fee });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, 400);
+  }
+});
+
+app.get("/v1/tokens", (c) => c.json(listTokens()));
+
+app.post("/v1/wallets/:address/tx/swap", async (c) => {
+  const address = c.req.param("address").toLowerCase();
+  const wallet = await getWallet(address);
+  if (!wallet) return c.json({ error: "wallet not found" }, 404);
+
+  const auth = c.req.header("authorization") ?? "";
+  const provided = auth.replace(/^Bearer\s+/i, "");
+  if (!provided || hashKey(provided) !== wallet.apiKeyHash) {
+    return c.json({ error: "unauthorized" }, 401);
+  }
+
+  const body = await c.req.json().catch(() => null);
+  if (!body?.tokenIn || !body?.tokenOut || !body?.amountIn) {
+    return c.json({ error: "tokenIn, tokenOut, amountIn are required" }, 400);
+  }
+
+  let amountIn: bigint;
+  try {
+    amountIn = BigInt(body.amountIn);
+  } catch {
+    return c.json({ error: "amountIn must be an integer string (wei / smallest unit)" }, 400);
+  }
+
+  const slippageBps = Number(body.slippageBps ?? 50);
+
+  try {
+    const { amountOut, fee } = await quoteExactIn({
+      tokenIn: body.tokenIn as string,
+      tokenOut: body.tokenOut as string,
+      amountIn,
+      fee: body.fee ? Number(body.fee) : undefined,
+    });
+
+    const amountOutMinimum = (amountOut * BigInt(10_000 - slippageBps)) / 10_000n;
+
+    const { callData, value } = buildSwapCalldata({
+      tokenIn: body.tokenIn as string,
+      tokenOut: body.tokenOut as string,
+      amountIn,
+      amountOutMinimum,
+      fee,
+      recipient: address as `0x${string}`,
+    });
+
+    return c.json({
+      callData,
+      value: value.toString(),
+      amountIn: amountIn.toString(),
+      amountOut: amountOut.toString(),
+      amountOutMinimum: amountOutMinimum.toString(),
+      fee,
+      slippageBps,
+    });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, 400);
+  }
+});
+
 app.post("/v1/stealth/compute", async (c) => {
   const body = await c.req.json().catch(() => null);
   if (!body?.metaAddress) {
@@ -183,4 +274,4 @@ async function enforceDailyLimit(wallet: WalletRecord, amountUsd: number): Promi
 }
 
 Bun.serve({ port: PORT, fetch: app.fetch });
-console.log(`marmo-core v0.3.0 listening on :${PORT} (${NETWORK})`);
+console.log(`marmo-core v0.4.0 listening on :${PORT} (${NETWORK})`);
