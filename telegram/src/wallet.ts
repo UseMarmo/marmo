@@ -195,47 +195,71 @@ export interface WalletToken {
   logo: string;
 }
 
-const BASE_TOKENS: Array<{ address: string; symbol: string; decimals: number; logo: string }> = [
-  { address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", symbol: "USDC",  decimals: 6,  logo: "/usdc.png" },
-  { address: "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2", symbol: "USDT",  decimals: 6,  logo: "" },
-  { address: "0x4200000000000000000000000000000000000006", symbol: "WETH",  decimals: 18, logo: "/eth.png" },
-  { address: "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf", symbol: "cbBTC", decimals: 8,  logo: "" },
-  { address: "0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb", symbol: "DAI",   decimals: 18, logo: "" },
-  { address: "0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22", symbol: "cbETH", decimals: 18, logo: "" },
-];
+const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef" as `0x${string}`;
 
-const BALANCE_OF_ABI = [
+const TOKEN_LOGO_MAP: Record<string, string> = {
+  "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913": "/usdc.png",
+  "0x4200000000000000000000000000000000000006": "/eth.png",
+};
+
+const ERC20_META_ABI = [
   { name: "balanceOf", type: "function", stateMutability: "view",
-    inputs: [{ name: "account", type: "address" }],
-    outputs: [{ type: "uint256" }] },
+    inputs: [{ name: "", type: "address" }], outputs: [{ type: "uint256" }] },
+  { name: "symbol",   type: "function", stateMutability: "view",
+    inputs: [], outputs: [{ type: "string" }] },
+  { name: "decimals", type: "function", stateMutability: "view",
+    inputs: [], outputs: [{ type: "uint8" }] },
 ] as const;
 
 export async function fetchWalletTokens(address: string): Promise<WalletToken[]> {
   const addr = address as `0x${string}`;
+  const paddedAddr = `0x000000000000000000000000${addr.slice(2).toLowerCase()}` as `0x${string}`;
 
-  const [ethRaw, ...tokenRaws] = await Promise.all([
+  const currentBlock = await publicClient.getBlockNumber();
+  const fromBlock = currentBlock > 500_000n ? currentBlock - 500_000n : 0n;
+
+  const [ethRaw, logs] = await Promise.all([
     publicClient.getBalance({ address: addr }),
-    ...BASE_TOKENS.map(t =>
-      publicClient.readContract({ address: t.address as `0x${string}`, abi: BALANCE_OF_ABI, functionName: "balanceOf", args: [addr] })
-        .catch(() => 0n)
-    ),
+    publicClient.getLogs({
+      fromBlock,
+      toBlock: "latest",
+      topics: [TRANSFER_TOPIC, null, paddedAddr],
+    }).catch(() => []),
   ]);
 
-  const tokens: WalletToken[] = [];
+  const tokens: WalletToken[] = [{
+    address: "",
+    symbol: "ETH",
+    decimals: 18,
+    balance: parseFloat(formatEther(ethRaw)).toFixed(6).replace(/\.?0+$/, "") || "0",
+    logo: "/eth.png",
+  }];
 
-  const ethBal = formatEther(ethRaw);
-  tokens.push({ address: "", symbol: "ETH", decimals: 18, balance: parseFloat(ethBal).toFixed(6).replace(/\.?0+$/, "") || "0", logo: "/eth.png" });
+  const uniqueContracts = [...new Set(logs.map(l => l.address.toLowerCase() as `0x${string}`))];
 
-  BASE_TOKENS.forEach((t, i) => {
-    const raw = tokenRaws[i] as bigint;
-    if (!raw || raw === 0n) return;
-    const bal = formatUnits(raw, t.decimals);
-    tokens.push({
-      ...t,
-      balance: parseFloat(bal).toFixed(t.decimals > 6 ? 6 : t.decimals).replace(/\.?0+$/, ""),
-    });
-  });
+  const results = await Promise.all(
+    uniqueContracts.map(async (contract) => {
+      try {
+        const [balance, symbol, decimals] = await Promise.all([
+          publicClient.readContract({ address: contract, abi: ERC20_META_ABI, functionName: "balanceOf", args: [addr] }),
+          publicClient.readContract({ address: contract, abi: ERC20_META_ABI, functionName: "symbol" }),
+          publicClient.readContract({ address: contract, abi: ERC20_META_ABI, functionName: "decimals" }),
+        ]);
+        if ((balance as bigint) === 0n) return null;
+        const dec = Number(decimals);
+        const bal = formatUnits(balance as bigint, dec);
+        return {
+          address: contract,
+          symbol: symbol as string,
+          decimals: dec,
+          balance: parseFloat(bal).toFixed(dec > 6 ? 6 : dec).replace(/\.?0+$/, ""),
+          logo: TOKEN_LOGO_MAP[contract] ?? "",
+        } satisfies WalletToken;
+      } catch { return null; }
+    })
+  );
 
+  for (const t of results) if (t) tokens.push(t);
   return tokens;
 }
 
