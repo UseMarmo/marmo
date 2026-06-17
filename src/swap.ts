@@ -1,17 +1,7 @@
 import { encodeFunctionData, decodeFunctionResult, parseAbi } from "viem";
 import { publicClient, NETWORK } from "./chain.js";
-
-const TOKENS: Record<string, Record<string, `0x${string}`>> = {
-  base: {
-    WETH: "0x4200000000000000000000000000000000000006",
-    USDC: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-    USDT: "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2",
-  },
-  "base-sepolia": {
-    WETH: "0x4200000000000000000000000000000000000006",
-    USDC: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
-  },
-};
+import { resolveToken, listTokens } from "./tokens.js";
+export { listTokens };
 
 const QUOTER_V2: Record<string, `0x${string}`> = {
   base: "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
@@ -40,18 +30,6 @@ const ACCOUNT_ABI = parseAbi([
   "function executeBatch(address[] dest, uint256[] values, bytes[] data) external",
 ]);
 
-function resolveToken(symbol: string): `0x${string}` {
-  if (symbol.startsWith("0x")) return symbol as `0x${string}`;
-  const addr = TOKENS[NETWORK]?.[symbol.toUpperCase()];
-  if (!addr) throw new Error(`unknown token "${symbol}" on ${NETWORK}`);
-  return addr;
-}
-
-export function listTokens(): Record<string, string> {
-  return Object.fromEntries(
-    Object.entries(TOKENS[NETWORK] ?? {}).map(([sym, addr]) => [sym, addr])
-  );
-}
 
 export async function quoteExactIn(params: {
   tokenIn: string;

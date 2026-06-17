@@ -9,6 +9,7 @@ import { pingStore, putShard, getShard, putWallet, getWallet, type WalletRecord 
 import { computeStealthAddress, parseMetaAddress } from "./stealth.js";
 import { getAnnouncements, getLatestBlock, NETWORK } from "./chain.js";
 import { quoteExactIn, buildSwapCalldata, listTokens } from "./swap.js";
+import { buildSendCalldata, buildStealthSendCalldata } from "./send.js";
 
 const VAULT_KEY = process.env.MARMO_VAULT_KEY ?? "dev-only-insecure-key";
 const PORT = Number(process.env.PORT ?? 8080);
@@ -24,6 +25,16 @@ function hashKey(key: string): string {
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+const _rateBuckets = new Map<string, number[]>();
+function checkRateLimit(key: string, maxPerMinute = 20): boolean {
+  const now = Date.now();
+  const hits = (_rateBuckets.get(key) ?? []).filter((t) => now - t < 60_000);
+  if (hits.length >= maxPerMinute) return false;
+  hits.push(now);
+  _rateBuckets.set(key, hits);
+  return true;
 }
 
 app.get("/", (c) =>
@@ -100,6 +111,10 @@ app.post("/v1/wallets/:address/cosign", async (c) => {
   const provided = auth.replace(/^Bearer\s+/i, "");
   if (!provided || hashKey(provided) !== wallet.apiKeyHash) {
     return c.json({ error: "unauthorized" }, 401);
+  }
+
+  if (!checkRateLimit(wallet.apiKeyHash)) {
+    return c.json({ error: "rate limit exceeded (20 cosigns/min)" }, 429);
   }
 
   const body = await c.req.json().catch(() => null);
@@ -210,6 +225,76 @@ app.post("/v1/wallets/:address/tx/swap", async (c) => {
       fee,
       slippageBps,
     });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, 400);
+  }
+});
+
+app.post("/v1/wallets/:address/tx/send", async (c) => {
+  const address = c.req.param("address").toLowerCase();
+  const wallet = await getWallet(address);
+  if (!wallet) return c.json({ error: "wallet not found" }, 404);
+
+  const auth = c.req.header("authorization") ?? "";
+  const provided = auth.replace(/^Bearer\s+/i, "");
+  if (!provided || hashKey(provided) !== wallet.apiKeyHash) {
+    return c.json({ error: "unauthorized" }, 401);
+  }
+
+  const body = await c.req.json().catch(() => null);
+  if (!body?.to || !body?.amount) {
+    return c.json({ error: "to and amount are required" }, 400);
+  }
+
+  let amount: bigint;
+  try {
+    amount = BigInt(body.amount);
+  } catch {
+    return c.json({ error: "amount must be an integer string (wei / smallest unit)" }, 400);
+  }
+
+  try {
+    const { callData, value } = buildSendCalldata({
+      to: body.to as `0x${string}`,
+      amount,
+      token: body.token as string | undefined,
+    });
+    return c.json({ callData, value: value.toString() });
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, 400);
+  }
+});
+
+app.post("/v1/wallets/:address/tx/stealth-send", async (c) => {
+  const address = c.req.param("address").toLowerCase();
+  const wallet = await getWallet(address);
+  if (!wallet) return c.json({ error: "wallet not found" }, 404);
+
+  const auth = c.req.header("authorization") ?? "";
+  const provided = auth.replace(/^Bearer\s+/i, "");
+  if (!provided || hashKey(provided) !== wallet.apiKeyHash) {
+    return c.json({ error: "unauthorized" }, 401);
+  }
+
+  const body = await c.req.json().catch(() => null);
+  if (!body?.recipientMetaAddress || !body?.amount) {
+    return c.json({ error: "recipientMetaAddress and amount are required" }, 400);
+  }
+
+  let amount: bigint;
+  try {
+    amount = BigInt(body.amount);
+  } catch {
+    return c.json({ error: "amount must be an integer string (wei / smallest unit)" }, 400);
+  }
+
+  try {
+    const result = buildStealthSendCalldata({
+      recipientMetaAddress: body.recipientMetaAddress as string,
+      amount,
+      token: body.token as string | undefined,
+    });
+    return c.json({ ...result, value: result.value.toString() });
   } catch (e) {
     return c.json({ error: (e as Error).message }, 400);
   }
