@@ -113,6 +113,12 @@ export default function App() {
     })();
   }, [navigate]);
 
+  function refreshBalance() {
+    if (!vault) return;
+    setBalance(null);
+    getBalance(vault.address).then(setBalance).catch(() => null);
+  }
+
   useEffect(() => {
     if (screen === "dashboard" && vault) {
       getBalance(vault.address).then(setBalance).catch(() => null);
@@ -135,6 +141,7 @@ export default function App() {
         onSend={() => navigate("send")}
         onReceive={() => navigate("receive")}
         onSwap={() => navigate("swap")}
+        onRefresh={refreshBalance}
       />
     );
   }
@@ -295,12 +302,14 @@ function DashboardScreen({
   onSend,
   onReceive,
   onSwap,
+  onRefresh,
 }: {
   vault: Vault;
   balance: BalanceResult | null;
   onSend: () => void;
   onReceive: () => void;
   onSwap: () => void;
+  onRefresh: () => void;
 }) {
   const [copied, setCopied] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
@@ -328,14 +337,14 @@ function DashboardScreen({
     <div className="screen dashboard">
       {showHelp && <SecurityModal onClose={() => setShowHelp(false)} />}
       {showBgPicker && <BgPickerDrawer current={cardBg} onSelect={selectBg} onClose={() => setShowBgPicker(false)} />}
-      <div className="card" style={{ backgroundImage: `url('/balance_card_media/${cardBg}')` }}>
+      <div className="card" style={{ backgroundImage: `url('/balance_card_media/${cardBg}')` }} onClick={onRefresh} role="button" aria-label="Refresh balance">
         <div className="card__top">
           <span className="card__label">Marmo Wallet</span>
           <div className="card__actions">
-            <button className="help-btn" onClick={() => setShowBgPicker(true)} aria-label="Card style">
+            <button className="help-btn" onClick={e => { e.stopPropagation(); setShowBgPicker(true); }} aria-label="Card style">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
             </button>
-            <button className="help-btn" onClick={() => setShowHelp(true)} aria-label="Security info">
+            <button className="help-btn" onClick={e => { e.stopPropagation(); setShowHelp(true); }} aria-label="Security info">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><circle cx="12" cy="17" r=".5" fill="currentColor"/></svg>
             </button>
           </div>
@@ -347,7 +356,7 @@ function DashboardScreen({
             {scrambledEth} <small>ETH</small>
           </span>
         </div>
-        <button className="addr" onClick={copy}>
+        <button className="addr" onClick={e => { e.stopPropagation(); copy(); }}>
           {shortAddress(vault.address)}
           <span className="addr__icon">{copied ? "✓" : <CopyIcon />}</span>
         </button>
