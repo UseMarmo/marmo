@@ -149,10 +149,32 @@ button, input, select, textarea { font-family: inherit; }
 .dashboard { gap: 1rem; }
 
 .card {
-  background: linear-gradient(165deg, var(--panel), #0f161e);
-  border: 1px solid var(--line);
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.13);
   border-radius: var(--radius);
   padding: 1.3rem;
+  background-size: cover;
+  background-position: center;
+}
+
+.card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(160deg, rgba(4, 12, 28, 0.78) 0%, rgba(2, 6, 18, 0.7) 100%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n' x='0' y='0'><feTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  opacity: 0.055;
+  pointer-events: none;
+  z-index: 1;
 }
 
 .card__top {
@@ -160,9 +182,13 @@ button, input, select, textarea { font-family: inherit; }
   align-items: center;
   justify-content: space-between;
   margin-bottom: 0.8rem;
+  position: relative;
+  z-index: 2;
 }
 
 .card__label { font-weight: 600; font-size: 0.9rem; }
+
+.card__actions { display: flex; gap: 0.4rem; align-items: center; }
 
 .pill {
   font-family: var(--mono);
@@ -178,6 +204,8 @@ button, input, select, textarea { font-family: inherit; }
   flex-direction: column;
   gap: 0.35rem;
   margin-bottom: 0.9rem;
+  position: relative;
+  z-index: 2;
 }
 
 .balance__usd {
@@ -206,8 +234,8 @@ button, input, select, textarea { font-family: inherit; }
 }
 
 .addr {
-  background: var(--bg-2);
-  border: 1px solid var(--line);
+  background: rgba(10, 14, 19, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 999px;
   padding: 0.4rem 0.75rem 0.4rem 0.9rem;
   font-family: var(--mono);
@@ -217,6 +245,8 @@ button, input, select, textarea { font-family: inherit; }
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
+  position: relative;
+  z-index: 2;
 }
 
 .addr__icon { display: flex; align-items: center; color: var(--blue-2); }
@@ -641,14 +671,56 @@ button, input, select, textarea { font-family: inherit; }
   width: 26px;
   height: 26px;
   border-radius: 50%;
-  background: var(--glass-bg-2);
-  border: 1px solid var(--glass-brd);
-  color: var(--muted);
+  background: rgba(10, 14, 19, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.6);
   cursor: pointer;
   flex-shrink: 0;
   transition: color 0.15s, border-color 0.15s;
+  line-height: 0;
 }
+.help-btn svg { display: block; }
 .help-btn:hover { color: var(--blue-2); border-color: var(--blue); }
+
+.bg-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.55rem;
+}
+
+.bg-option {
+  aspect-ratio: 16 / 9;
+  border-radius: 10px;
+  background-size: cover;
+  background-position: center;
+  border: 2px solid transparent;
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.12s;
+  padding: 0;
+}
+
+.bg-option::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(4, 10, 24, 0.42);
+  pointer-events: none;
+}
+
+.bg-option--active { border-color: var(--blue); }
+.bg-option:active { transform: scale(0.96); }
+
+.bg-option__check {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  z-index: 1;
+  color: #fff;
+  line-height: 0;
+}
 
 .modal-overlay {
   position: fixed;

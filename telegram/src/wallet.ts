@@ -1,5 +1,5 @@
 import { secp256k1 } from "@noble/curves/secp256k1";
-import { createPublicClient, http, formatEther, formatUnits, bytesToHex, hexToBytes, parseAbiItem } from "viem";
+import { createPublicClient, http, formatEther, formatUnits, bytesToHex, hexToBytes } from "viem";
 import { generatePrivateKey, privateKeyToAddress, privateKeyToAccount } from "viem/accounts";
 import { base } from "viem/chains";
 import * as core from "./core.js";
@@ -195,96 +195,62 @@ export interface WalletToken {
   logo: string;
 }
 
-const TRANSFER_EVENT = parseAbiItem("event Transfer(address indexed from, address indexed to, uint256 value)");
-
 const TOKEN_LOGO_MAP: Record<string, string> = {
   "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913": "/usdc.png",
   "0x4200000000000000000000000000000000000006": "/eth.png",
 };
 
-const ERC20_META_ABI = [
-  { name: "balanceOf", type: "function", stateMutability: "view",
-    inputs: [{ name: "", type: "address" }], outputs: [{ type: "uint256" }] },
-  { name: "symbol",   type: "function", stateMutability: "view",
-    inputs: [], outputs: [{ type: "string" }] },
-  { name: "decimals", type: "function", stateMutability: "view",
-    inputs: [], outputs: [{ type: "uint8" }] },
-] as const;
-
-interface TokenCache { contracts: string[]; scannedThrough: number; }
-
-function loadTokenCache(address: string): TokenCache {
-  try {
-    const raw = localStorage.getItem(`marmo_tkc_${address.toLowerCase()}`);
-    if (raw) return JSON.parse(raw) as TokenCache;
-  } catch {}
-  return { contracts: [], scannedThrough: 0 };
-}
-
-function saveTokenCache(address: string, cache: TokenCache) {
-  try {
-    localStorage.setItem(`marmo_tkc_${address.toLowerCase()}`, JSON.stringify(cache));
-  } catch {}
-}
-
 export async function fetchWalletTokens(address: string): Promise<WalletToken[]> {
   const addr = address as `0x${string}`;
-  const cache = loadTokenCache(address);
-  const CHUNK = 9_900n;
-
-  const currentBlock = await publicClient.getBlockNumber();
-  const fromBlock = cache.scannedThrough
-    ? BigInt(cache.scannedThrough) + 1n
-    : currentBlock > CHUNK ? currentBlock - CHUNK : 0n;
-
-  if (fromBlock <= currentBlock) {
-    const toBlock = fromBlock + CHUNK < currentBlock ? fromBlock + CHUNK : currentBlock;
-    const logs = await publicClient.getLogs({
-      fromBlock,
-      toBlock,
-      event: TRANSFER_EVENT,
-      args: { to: addr },
-    }).catch(() => []);
-
-    const found = logs.map(l => l.address.toLowerCase());
-    cache.contracts = [...new Set([...cache.contracts, ...found])];
-    cache.scannedThrough = Number(toBlock);
-    saveTokenCache(address, cache);
-  }
-
-  const [ethRaw, ...tokenResults] = await Promise.all([
-    publicClient.getBalance({ address: addr }),
-    ...cache.contracts.map(async (contract) => {
-      try {
-        const c = contract as `0x${string}`;
-        const [balance, symbol, decimals] = await Promise.all([
-          publicClient.readContract({ address: c, abi: ERC20_META_ABI, functionName: "balanceOf", args: [addr] }),
-          publicClient.readContract({ address: c, abi: ERC20_META_ABI, functionName: "symbol" }),
-          publicClient.readContract({ address: c, abi: ERC20_META_ABI, functionName: "decimals" }),
-        ]);
-        if ((balance as bigint) === 0n) return null;
-        const dec = Number(decimals);
-        return {
-          address: contract,
-          symbol: symbol as string,
-          decimals: dec,
-          balance: parseFloat(formatUnits(balance as bigint, dec)).toFixed(dec > 6 ? 6 : dec).replace(/\.?0+$/, ""),
-          logo: TOKEN_LOGO_MAP[contract] ?? "",
-        } satisfies WalletToken;
-      } catch { return null; }
-    }),
-  ]);
-
-  const tokens: WalletToken[] = [{
+  try {
+    const res = await fetch("https://rpc.ankr.com/multichain", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        method: "ankr_getAccountBalance",
+        params: {
+          blockchain: ["base"],
+          walletAddress: address,
+          onlyWhitelisted: false,
+          pageSize: 50,
+        },
+        id: 1,
+      }),
+    });
+    const data = await res.json() as {
+      result?: { assets?: Array<{
+        tokenType: string; contractAddress?: string;
+        tokenSymbol: string; tokenDecimals: number; balance: string;
+      }>};
+    };
+    const assets = data.result?.assets ?? [];
+    const tokens: WalletToken[] = [];
+    for (const a of assets) {
+      if (parseFloat(a.balance) === 0) continue;
+      const isNative = a.tokenType === "NATIVE";
+      const contract = a.contractAddress?.toLowerCase() ?? "";
+      tokens.push({
+        address: isNative ? "" : contract,
+        symbol: a.tokenSymbol,
+        decimals: a.tokenDecimals,
+        balance: parseFloat(a.balance)
+          .toFixed(a.tokenDecimals > 6 ? 6 : a.tokenDecimals)
+          .replace(/\.?0+$/, ""),
+        logo: isNative ? "/eth.png" : (TOKEN_LOGO_MAP[contract] ?? ""),
+      });
+    }
+    tokens.sort((a) => a.address === "" ? -1 : 1);
+    if (tokens.length) return tokens;
+  } catch {}
+  const ethRaw = await publicClient.getBalance({ address: addr });
+  return [{
     address: "",
     symbol: "ETH",
     decimals: 18,
     balance: parseFloat(formatEther(ethRaw)).toFixed(6).replace(/\.?0+$/, "") || "0",
     logo: "/eth.png",
   }];
-
-  for (const t of tokenResults) if (t) tokens.push(t);
-  return tokens;
 }
 
 let priceCache: { value: number; ts: number } | null = null;

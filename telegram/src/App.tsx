@@ -142,6 +142,44 @@ function WelcomeScreen({ onCreated }: { onCreated: (v: Vault) => void }) {
   );
 }
 
+const BG_OPTIONS = [1, 2, 3, 4, 5, 6, 7].map(n => `marmo_balance_${n}.jpg`);
+const DEFAULT_BG = "marmo_balance_3.jpg";
+
+function BgPickerDrawer({ current, onSelect, onClose }: {
+  current: string;
+  onSelect: (bg: string) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-panel" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <span className="modal-title">Card style</span>
+          <button className="modal-close" onClick={onClose}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div className="bg-grid">
+          {BG_OPTIONS.map(bg => (
+            <button
+              key={bg}
+              className={`bg-option${bg === current ? " bg-option--active" : ""}`}
+              onClick={() => onSelect(bg)}
+              style={{ backgroundImage: `url('/balance_card_media/${bg}')` }}
+            >
+              {bg === current && (
+                <span className="bg-option__check">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SecurityModal({ onClose }: { onClose: () => void }) {
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -218,6 +256,16 @@ function DashboardScreen({
 }) {
   const [copied, setCopied] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [showBgPicker, setShowBgPicker] = useState(false);
+  const [cardBg, setCardBg] = useState<string>(
+    () => localStorage.getItem("marmo_card_bg") ?? DEFAULT_BG
+  );
+
+  function selectBg(bg: string) {
+    setCardBg(bg);
+    localStorage.setItem("marmo_card_bg", bg);
+    setShowBgPicker(false);
+  }
 
   async function copy() {
     await navigator.clipboard.writeText(vault.address);
@@ -229,12 +277,18 @@ function DashboardScreen({
   return (
     <div className="screen dashboard">
       {showHelp && <SecurityModal onClose={() => setShowHelp(false)} />}
-      <div className="card">
+      {showBgPicker && <BgPickerDrawer current={cardBg} onSelect={selectBg} onClose={() => setShowBgPicker(false)} />}
+      <div className="card" style={{ backgroundImage: `url('/balance_card_media/${cardBg}')` }}>
         <div className="card__top">
           <span className="card__label">Marmo Wallet</span>
-          <button className="help-btn" onClick={() => setShowHelp(true)} aria-label="Security info">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><circle cx="12" cy="17" r=".5" fill="currentColor"/></svg>
-          </button>
+          <div className="card__actions">
+            <button className="help-btn" onClick={() => setShowBgPicker(true)} aria-label="Card style">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </button>
+            <button className="help-btn" onClick={() => setShowHelp(true)} aria-label="Security info">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><circle cx="12" cy="17" r=".5" fill="currentColor"/></svg>
+            </button>
+          </div>
         </div>
         <div className="balance">
           {balance ? (
