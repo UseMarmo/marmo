@@ -610,6 +610,11 @@ function SendScreen({ vault, balance, onBack }: { vault: Vault; balance: Balance
   const usdAmount = amountMode === "usd" ? parsed : parsed * price;
   const decimals = tokenInfo?.decimals ?? 18;
   const sendAmountWei = BigInt(Math.round(tokenAmount * 10 ** decimals)).toString();
+  const overBalance = tokenAmount > 0 && parseFloat(tokenInfo.balance || "0") > 0 && tokenAmount > parseFloat(tokenInfo.balance);
+
+  useEffect(() => {
+    if (overBalance) try { navigator.vibrate?.(120); } catch {}
+  }, [overBalance]);
 
   function handleAmountInput(e: React.ChangeEvent<HTMLInputElement>) {
     const v = e.target.value.replace(/[^0-9.]/g, "").replace(/(\..*?)\./g, "$1");
@@ -778,7 +783,7 @@ function SendScreen({ vault, balance, onBack }: { vault: Vault; balance: Balance
           {amountMode === "usd" && amountRaw && <span className="amount-prefix">$</span>}
           <input
             ref={amountRef}
-            className="amount-input"
+            className={`amount-input${overBalance ? " amount-input--over" : ""}`}
             type="text"
             inputMode="decimal"
             placeholder="0"
@@ -827,7 +832,7 @@ function SendScreen({ vault, balance, onBack }: { vault: Vault; balance: Balance
 
       {err && <p className="err">{err}</p>}
 
-      <button className="btn btn--primary" onClick={goPreview} disabled={!parsed || !to}>
+      <button className="btn btn--primary" onClick={goPreview} disabled={!parsed || !to || overBalance}>
         Preview
       </button>
     </div>
@@ -993,6 +998,11 @@ function SwapScreen({ vault, onBack }: { vault: Vault; onBack: () => void }) {
 
   const balanceIn = walletTokens.find(t => t.address.toLowerCase() === tokenIn.address.toLowerCase())?.balance ?? null;
   const balanceOut = walletTokens.find(t => t.address.toLowerCase() === tokenOut.address.toLowerCase())?.balance ?? null;
+  const overSwap = balanceIn !== null && parsed > 0 && parseFloat(balanceIn) > 0 && parsed > parseFloat(balanceIn);
+
+  useEffect(() => {
+    if (overSwap) try { navigator.vibrate?.(120); } catch {}
+  }, [overSwap]);
 
   useEffect(() => {
     setQuote(null);
@@ -1117,7 +1127,7 @@ function SwapScreen({ vault, onBack }: { vault: Vault; onBack: () => void }) {
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M6 9l6 6 6-6"/></svg>
             </button>
             <input
-              className="swap-amount-input"
+              className={`swap-amount-input${overSwap ? " swap-amount-input--over" : ""}`}
               type="text"
               inputMode="decimal"
               placeholder="0"
@@ -1193,16 +1203,16 @@ function SwapScreen({ vault, onBack }: { vault: Vault; onBack: () => void }) {
         </div>
       )}
 
-      <div className="swap-actions">
-        <button className="swap-slippage-toggle" onClick={() => setShowSlippage(s => !s)}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93A10 10 0 0 0 4.93 19.07M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
-          Slippage: {slippage / 100}%
-        </button>
+      <button className="btn btn--primary" onClick={submit} disabled={loading || !quote || parsed <= 0 || overSwap}>
+        {loading
+          ? "Swapping…"
+          : <><img src="/icons8-swap-96-2.png" width={18} height={18} alt="" style={{ verticalAlign: "middle", marginRight: "0.35rem" }} />Swap</>}
+      </button>
 
-        <button className="btn btn--primary swap-submit-btn" onClick={submit} disabled={loading || !quote || parsed <= 0}>
-          {loading
-            ? "Swapping…"
-            : <><img src="/icons8-swap-96.png" width={18} height={18} alt="" style={{ verticalAlign: "middle", marginRight: "0.35rem" }} />Swap</>}
+      <div className="swap-slippage-row">
+        <button className="swap-slippage-toggle" onClick={() => setShowSlippage(s => !s)}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93A10 10 0 0 0 4.93 19.07M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+          Slippage: {slippage / 100}%
         </button>
       </div>
 

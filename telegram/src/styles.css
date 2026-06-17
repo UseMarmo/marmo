@@ -648,6 +648,7 @@ button, input, select, textarea { font-family: inherit; }
 }
 
 .amount-input::placeholder { color: rgba(255,255,255,0.18); }
+.amount-input--over { color: #ff5c5c !important; caret-color: #ff5c5c; }
 
 .amount-secondary {
   display: flex;
@@ -914,6 +915,7 @@ button, input, select, textarea { font-family: inherit; }
   padding: 0;
 }
 .swap-amount-input::placeholder { color: var(--ink-muted); }
+.swap-amount-input--over { color: #ff5c5c !important; }
 .swap-amount-out {
   font-size: 1.7rem;
   font-weight: 700;
@@ -971,26 +973,21 @@ button, input, select, textarea { font-family: inherit; }
 .swap-fees__row--rate { color: var(--ink); }
 .swap-fees__val { font-variant-numeric: tabular-nums; }
 
-.swap-actions {
+.swap-slippage-row {
   display: flex;
-  align-items: center;
-  gap: 0.6rem;
+  justify-content: flex-end;
 }
-.swap-submit-btn { flex: 1; }
 .swap-slippage-toggle {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0 0.85rem;
-  height: 2.6rem;
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-brd);
-  border-radius: var(--radius-sm);
-  font-size: 0.78rem;
+  gap: 0.3rem;
+  padding: 0.3rem 0.65rem;
+  background: none;
+  border: none;
+  font-size: 0.75rem;
   color: var(--ink-muted);
   cursor: pointer;
-  white-space: nowrap;
-  flex-shrink: 0;
+  opacity: 0.75;
 }
 .swap-slippage-panel {
   background: var(--glass-bg);
