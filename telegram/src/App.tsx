@@ -447,16 +447,17 @@ function AddTokenModal({ walletAddress, onAdd, onClose }: {
   }
 
   function paste() {
-    const tg = (window as { Telegram?: { WebApp?: { readTextFromClipboard?: (cb: (t: string | null) => void) => void } } }).Telegram?.WebApp;
-    if (tg?.readTextFromClipboard) {
-      tg.readTextFromClipboard((text) => {
-        if (text) { setCa(text.trim()); setPreview(null); setErr(""); }
-      });
-    } else {
-      navigator.clipboard.readText().then((text) => {
-        setCa(text.trim()); setPreview(null); setErr("");
-      }).catch(() => {});
-    }
+    const apply = (text: string | null) => {
+      const val = text?.trim() ?? "";
+      if (val) { setCa(val); setPreview(null); setErr(""); }
+      else setErr("Nothing in clipboard — long-press the field and tap Paste.");
+    };
+
+    navigator.clipboard.readText().then(apply).catch(() => {
+      const tg = (window as { Telegram?: { WebApp?: { readTextFromClipboard?: (cb: (t: string | null) => void) => void } } }).Telegram?.WebApp;
+      if (tg?.readTextFromClipboard) tg.readTextFromClipboard(apply);
+      else setErr("Long-press the field below and tap Paste.");
+    });
   }
 
   function confirm() {
@@ -482,6 +483,10 @@ function AddTokenModal({ walletAddress, onAdd, onClose }: {
             placeholder="0x…"
             value={ca}
             onChange={e => { setCa(e.target.value); setPreview(null); setErr(""); }}
+            onPaste={e => {
+              const text = e.clipboardData.getData("text").trim();
+              if (text) { e.preventDefault(); setCa(text); setPreview(null); setErr(""); }
+            }}
             style={{ fontSize: "16px" }}
             autoComplete="off"
             spellCheck={false}
