@@ -386,7 +386,8 @@ export async function buildAndSubmit(
   const sigA = await privateKeyToAccount(vault.shardAPrivKey).signMessage({
     message: { raw: hexToBytes(userOpHash) },
   });
-  const sigB = await core.cosign(vault.address, vault.apiKey, userOpHash);
+  const cosignKey = privateKeyToAddress(vault.shardAPrivKey);
+  const sigB = await core.cosign(cosignKey, vault.apiKey, userOpHash);
   const signature = `0x${sigA.slice(2)}${sigB.slice(2)}` as `0x${string}`;
 
   const res = await fetch(BUNDLER_URL, {

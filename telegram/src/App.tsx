@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { privateKeyToAddress } from "viem/accounts";
 import {
   createWallet,
   vaultExists,
@@ -486,11 +487,12 @@ function SendScreen({ vault, balance, onBack }: { vault: Vault; balance: Balance
     try {
       const isStealthy = to.length > 42;
       let hash: string;
+      const cosignKey = privateKeyToAddress(vault.shardAPrivKey);
       if (isStealthy) {
-        const cd = await core.buildStealthSend(vault.address, vault.apiKey, to, sendAmountWei, token || undefined);
+        const cd = await core.buildStealthSend(cosignKey, vault.apiKey, to, sendAmountWei, token || undefined);
         hash = await buildAndSubmit(vault, cd.callData, BigInt(cd.value));
       } else {
-        const cd = await core.buildSend(vault.address, vault.apiKey, to, sendAmountWei, token || undefined);
+        const cd = await core.buildSend(cosignKey, vault.apiKey, to, sendAmountWei, token || undefined);
         hash = await buildAndSubmit(vault, cd.callData, BigInt(cd.value));
       }
       haptic("success");
