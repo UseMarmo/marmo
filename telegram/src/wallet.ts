@@ -195,37 +195,46 @@ export interface WalletToken {
   logo: string;
 }
 
-const TOKEN_LOGOS: Record<string, string> = {
-  "": "/eth.png",
-  "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913": "/usdc.png",
-};
+const BASE_TOKENS: Array<{ address: string; symbol: string; decimals: number; logo: string }> = [
+  { address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", symbol: "USDC",  decimals: 6,  logo: "/usdc.png" },
+  { address: "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2", symbol: "USDT",  decimals: 6,  logo: "" },
+  { address: "0x4200000000000000000000000000000000000006", symbol: "WETH",  decimals: 18, logo: "/eth.png" },
+  { address: "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf", symbol: "cbBTC", decimals: 8,  logo: "" },
+  { address: "0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb", symbol: "DAI",   decimals: 18, logo: "" },
+  { address: "0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22", symbol: "cbETH", decimals: 18, logo: "" },
+];
+
+const BALANCE_OF_ABI = [
+  { name: "balanceOf", type: "function", stateMutability: "view",
+    inputs: [{ name: "account", type: "address" }],
+    outputs: [{ type: "uint256" }] },
+] as const;
 
 export async function fetchWalletTokens(address: string): Promise<WalletToken[]> {
+  const addr = address as `0x${string}`;
+
+  const [ethRaw, ...tokenRaws] = await Promise.all([
+    publicClient.getBalance({ address: addr }),
+    ...BASE_TOKENS.map(t =>
+      publicClient.readContract({ address: t.address as `0x${string}`, abi: BALANCE_OF_ABI, functionName: "balanceOf", args: [addr] })
+        .catch(() => 0n)
+    ),
+  ]);
+
   const tokens: WalletToken[] = [];
 
-  const ethRaw = await publicClient.getBalance({ address: address as `0x${string}` });
-  tokens.push({ address: "", symbol: "ETH", decimals: 18, balance: formatEther(ethRaw), logo: "/eth.png" });
+  const ethBal = formatEther(ethRaw);
+  tokens.push({ address: "", symbol: "ETH", decimals: 18, balance: parseFloat(ethBal).toFixed(6).replace(/\.?0+$/, "") || "0", logo: "/eth.png" });
 
-  try {
-    const res = await fetch(`https://base.blockscout.com/api/v2/addresses/${address}/token-balances`);
-    const data = await res.json() as Array<{
-      token: { address: string; decimals: string; symbol: string; icon_url?: string | null };
-      value: string;
-    }>;
-    for (const item of data) {
-      if (!item.value || BigInt(item.value) === 0n) continue;
-      const decimals = parseInt(item.token.decimals) || 18;
-      const bal = formatUnits(BigInt(item.value), decimals);
-      const addrLower = item.token.address.toLowerCase();
-      tokens.push({
-        address: item.token.address,
-        symbol: item.token.symbol,
-        decimals,
-        balance: parseFloat(bal).toFixed(decimals > 6 ? 6 : decimals).replace(/\.?0+$/, ""),
-        logo: TOKEN_LOGOS[addrLower] ?? item.token.icon_url ?? "",
-      });
-    }
-  } catch {}
+  BASE_TOKENS.forEach((t, i) => {
+    const raw = tokenRaws[i] as bigint;
+    if (!raw || raw === 0n) return;
+    const bal = formatUnits(raw, t.decimals);
+    tokens.push({
+      ...t,
+      balance: parseFloat(bal).toFixed(t.decimals > 6 ? 6 : t.decimals).replace(/\.?0+$/, ""),
+    });
+  });
 
   return tokens;
 }
