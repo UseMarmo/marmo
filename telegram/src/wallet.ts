@@ -12,11 +12,6 @@ const RP_ID = import.meta.env.VITE_RP_ID ?? "localhost";
 
 const VAULT_KEY = "marmo_vault_v2";
 
-const ERC20_ABI = [
-  { name: "balanceOf", type: "function", stateMutability: "view",
-    inputs: [{ name: "account", type: "address" }],
-    outputs: [{ type: "uint256" }] },
-] as const;
 
 const EP_ABI = [
   { name: "getNonce", type: "function", stateMutability: "view",
@@ -195,62 +190,106 @@ export interface WalletToken {
   logo: string;
 }
 
-const TOKEN_LOGO_MAP: Record<string, string> = {
-  "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913": "/usdc.png",
-  "0x4200000000000000000000000000000000000006": "/eth.png",
-};
+const BASE_TOKENS: Array<{ address: `0x${string}`; symbol: string; decimals: number; logo: string }> = [
+  { address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", symbol: "USDC",  decimals: 6,  logo: "/usdc.png" },
+  { address: "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2", symbol: "USDT",  decimals: 6,  logo: "" },
+  { address: "0x4200000000000000000000000000000000000006", symbol: "WETH",  decimals: 18, logo: "/eth.png" },
+  { address: "0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb", symbol: "DAI",   decimals: 18, logo: "" },
+  { address: "0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA", symbol: "USDbC", decimals: 6,  logo: "" },
+  { address: "0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22", symbol: "cbETH", decimals: 18, logo: "" },
+];
+
+const TOKEN_LOGO_MAP: Record<string, string> = Object.fromEntries(
+  BASE_TOKENS.map(t => [t.address.toLowerCase(), t.logo])
+);
+
+const ERC20_ABI = [
+  { name: "balanceOf", type: "function", stateMutability: "view",
+    inputs: [{ name: "", type: "address" }], outputs: [{ type: "uint256" }] },
+  { name: "symbol",   type: "function", stateMutability: "view",
+    inputs: [], outputs: [{ type: "string" }] },
+  { name: "decimals", type: "function", stateMutability: "view",
+    inputs: [], outputs: [{ type: "uint8" }] },
+] as const;
+
+const TRANSFER_SIG = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 
 export async function fetchWalletTokens(address: string): Promise<WalletToken[]> {
   const addr = address as `0x${string}`;
-  try {
-    const res = await fetch("https://rpc.ankr.com/multichain", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        jsonrpc: "2.0",
-        method: "ankr_getAccountBalance",
-        params: {
-          blockchain: ["base"],
-          walletAddress: address,
-          onlyWhitelisted: false,
-          pageSize: 50,
-        },
-        id: 1,
-      }),
-    });
-    const data = await res.json() as {
-      result?: { assets?: Array<{
-        tokenType: string; contractAddress?: string;
-        tokenSymbol: string; tokenDecimals: number; balance: string;
-      }>};
-    };
-    const assets = data.result?.assets ?? [];
-    const tokens: WalletToken[] = [];
-    for (const a of assets) {
-      if (parseFloat(a.balance) === 0) continue;
-      const isNative = a.tokenType === "NATIVE";
-      const contract = a.contractAddress?.toLowerCase() ?? "";
-      tokens.push({
-        address: isNative ? "" : contract,
-        symbol: a.tokenSymbol,
-        decimals: a.tokenDecimals,
-        balance: parseFloat(a.balance)
-          .toFixed(a.tokenDecimals > 6 ? 6 : a.tokenDecimals)
-          .replace(/\.?0+$/, ""),
-        logo: isNative ? "/eth.png" : (TOKEN_LOGO_MAP[contract] ?? ""),
-      });
-    }
-    tokens.sort((a) => a.address === "" ? -1 : 1);
-    if (tokens.length) return tokens;
-  } catch {}
-  const ethRaw = await publicClient.getBalance({ address: addr });
-  return [{
+  const knownAddresses = new Set(BASE_TOKENS.map(t => t.address.toLowerCase()));
+
+  const currentBlock = await publicClient.getBlockNumber();
+  const fromBlock = currentBlock > 9_900n ? currentBlock - 9_900n : 0n;
+  const topicTo = `0x000000000000000000000000${addr.slice(2).toLowerCase()}`;
+
+  const [ethRaw, ...knownResults] = await Promise.all([
+    publicClient.getBalance({ address: addr }),
+    ...BASE_TOKENS.map(async (t) => {
+      try {
+        const bal = await publicClient.readContract({
+          address: t.address, abi: ERC20_ABI, functionName: "balanceOf", args: [addr],
+        }) as bigint;
+        if (bal === 0n) return null;
+        return {
+          address: t.address.toLowerCase(),
+          symbol: t.symbol,
+          decimals: t.decimals,
+          balance: parseFloat(formatUnits(bal, t.decimals))
+            .toFixed(t.decimals > 6 ? 6 : t.decimals).replace(/\.?0+$/, ""),
+          logo: t.logo,
+        } satisfies WalletToken;
+      } catch { return null; }
+    }),
+  ]);
+
+  const tokens: WalletToken[] = [{
     address: "",
     symbol: "ETH",
     decimals: 18,
     balance: parseFloat(formatEther(ethRaw)).toFixed(6).replace(/\.?0+$/, "") || "0",
     logo: "/eth.png",
   }];
+
+  for (const t of knownResults) if (t) tokens.push(t);
+
+  try {
+    const res = await fetch("https://base-rpc.publicnode.com", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0", id: 1, method: "eth_getLogs",
+        params: [{ fromBlock: `0x${fromBlock.toString(16)}`, toBlock: "latest",
+          topics: [TRANSFER_SIG, null, topicTo] }],
+      }),
+    });
+    const data = await res.json() as { result?: Array<{ address: string }> };
+    const discovered = (data.result ?? [])
+      .map(l => l.address.toLowerCase())
+      .filter(a => !knownAddresses.has(a));
+    const unique = [...new Set(discovered)];
+
+    const extra = await Promise.all(unique.map(async (contract) => {
+      try {
+        const c = contract as `0x${string}`;
+        const [bal, sym, dec] = await Promise.all([
+          publicClient.readContract({ address: c, abi: ERC20_ABI, functionName: "balanceOf", args: [addr] }),
+          publicClient.readContract({ address: c, abi: ERC20_ABI, functionName: "symbol" }),
+          publicClient.readContract({ address: c, abi: ERC20_ABI, functionName: "decimals" }),
+        ]);
+        if ((bal as bigint) === 0n) return null;
+        const d = Number(dec);
+        return {
+          address: contract, symbol: sym as string, decimals: d,
+          balance: parseFloat(formatUnits(bal as bigint, d))
+            .toFixed(d > 6 ? 6 : d).replace(/\.?0+$/, ""),
+          logo: TOKEN_LOGO_MAP[contract] ?? "",
+        } satisfies WalletToken;
+      } catch { return null; }
+    }));
+    for (const t of extra) if (t) tokens.push(t);
+  } catch {}
+
+  return tokens;
 }
 
 let priceCache: { value: number; ts: number } | null = null;
