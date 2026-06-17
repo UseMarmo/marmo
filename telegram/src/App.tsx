@@ -354,9 +354,20 @@ function DashboardScreen({
       </div>
 
       <div className="actions">
-        <button className="btn btn--ghost" onClick={onReceive}>Receive</button>
-        <button className="btn btn--ghost" onClick={onSwap}>Swap</button>
-        <button className="btn btn--primary" onClick={onSend}>Send</button>
+        <div className="actions__row">
+          <button className="btn btn--ghost" onClick={onReceive}>
+            <img src="/icons8-recieve-96.png" width={18} height={18} alt="" />
+            Receive
+          </button>
+          <button className="btn btn--primary" onClick={onSend}>
+            <img src="/icons8-send-96.png" width={18} height={18} alt="" />
+            Send
+          </button>
+        </div>
+        <button className="btn btn--ghost actions__swap" onClick={onSwap}>
+          <img src="/icons8-swap-96.png" width={18} height={18} alt="" />
+          Swap
+        </button>
       </div>
     </div>
   );
@@ -823,48 +834,112 @@ function SendScreen({ vault, balance, onBack }: { vault: Vault; balance: Balance
   );
 }
 
-const SWAP_TOKENS = [
-  { address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", symbol: "USDC", decimals: 6 },
-  { address: "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2", symbol: "USDT", decimals: 6 },
-  { address: "0x4200000000000000000000000000000000000006", symbol: "WETH", decimals: 18 },
-  { address: "0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb", symbol: "DAI", decimals: 18 },
-  { address: "0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA", symbol: "USDbC", decimals: 6 },
+interface SwapToken { address: string; symbol: string; decimals: number; logo: string; }
+
+const SWAP_TOKENS: SwapToken[] = [
+  { address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", symbol: "USDC",  decimals: 6,  logo: "/usdc.png" },
+  { address: "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2", symbol: "USDT",  decimals: 6,  logo: "" },
+  { address: "0x4200000000000000000000000000000000000006", symbol: "WETH",  decimals: 18, logo: "/eth.png" },
+  { address: "0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb", symbol: "DAI",   decimals: 18, logo: "" },
+  { address: "0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6CA", symbol: "USDbC", decimals: 6,  logo: "" },
 ];
 
+function SwapTokenLogo({ logo, symbol, size = 28 }: { logo: string; symbol: string; size?: number }) {
+  const [err, setErr] = useState(false);
+  if (logo && !err) {
+    return <img src={logo} width={size} height={size} className="swap-tok-logo" alt="" onError={() => setErr(true)} />;
+  }
+  return (
+    <div className="swap-tok-logo swap-tok-logo--fallback" style={{ width: size, height: size }}>
+      {symbol[0] ?? "?"}
+    </div>
+  );
+}
+
+function SwapTokenModal({
+  walletAddress, exclude, onSelect, onClose,
+}: { walletAddress: string; exclude: string; onSelect: (t: SwapToken) => void; onClose: () => void }) {
+  const [search, setSearch] = useState("");
+  const [extra, setExtra] = useState<SwapToken | null>(null);
+  const [looking, setLooking] = useState(false);
+
+  const isCA = /^0x[0-9a-fA-F]{40}$/.test(search.trim());
+
+  useEffect(() => {
+    if (!isCA) { setExtra(null); return; }
+    setLooking(true);
+    fetchTokenByAddress(walletAddress, search.trim())
+      .then(tok => setExtra(tok ? { address: tok.address, symbol: tok.symbol, decimals: tok.decimals, logo: "" } : null))
+      .catch(() => setExtra(null))
+      .finally(() => setLooking(false));
+  }, [search, walletAddress]);
+
+  const base = SWAP_TOKENS.filter(t =>
+    t.address !== exclude &&
+    (t.symbol.toLowerCase().includes(search.toLowerCase()) || t.address.toLowerCase().includes(search.toLowerCase()))
+  );
+  const list: SwapToken[] = extra ? [extra, ...base.filter(t => t.address !== extra.address)] : base;
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal swap-modal" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <span className="modal-header__title">Select token</span>
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
+        <input
+          className="modal-search"
+          placeholder="Search symbol or paste contract address"
+          value={search}
+          autoFocus
+          onChange={e => setSearch(e.target.value)}
+        />
+        {looking && <p className="modal-hint">Looking up token…</p>}
+        <div className="swap-token-list">
+          {list.map(t => (
+            <button key={t.address} className="swap-token-item" onClick={() => { onSelect(t); onClose(); }}>
+              <SwapTokenLogo logo={t.logo} symbol={t.symbol} size={32} />
+              <div className="swap-token-item__info">
+                <span className="swap-token-item__sym">{t.symbol}</span>
+                <span className="swap-token-item__addr">{t.address.slice(0, 6)}…{t.address.slice(-4)}</span>
+              </div>
+            </button>
+          ))}
+          {list.length === 0 && !looking && <p className="modal-hint">No results.</p>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SwapScreen({ vault, onBack }: { vault: Vault; onBack: () => void }) {
-  const [tokenIn, setTokenIn] = useState(SWAP_TOKENS[0].address);
-  const [tokenOut, setTokenOut] = useState(SWAP_TOKENS[2].address);
+  const [allTokens, setAllTokens] = useState<SwapToken[]>(SWAP_TOKENS);
+  const [tokenIn, setTokenIn] = useState<SwapToken>(SWAP_TOKENS[0]);
+  const [tokenOut, setTokenOut] = useState<SwapToken>(SWAP_TOKENS[2]);
+  const [picker, setPicker] = useState<"in" | "out" | null>(null);
   const [amountRaw, setAmountRaw] = useState("");
   const [quote, setQuote] = useState<{ amountOut: string; fee: number } | null>(null);
   const [quoting, setQuoting] = useState(false);
   const [step, setStep] = useState<"input" | "result">("input");
   const [loading, setLoading] = useState(false);
   const [txResult, setTxResult] = useState<TxResult | null>(null);
-  const amountRef = useRef<HTMLInputElement>(null);
 
-  const inToken = SWAP_TOKENS.find(t => t.address === tokenIn)!;
-  const outToken = SWAP_TOKENS.find(t => t.address === tokenOut)!;
   const parsed = parseFloat(amountRaw) || 0;
-  const amountIn = parsed > 0
-    ? BigInt(Math.round(parsed * 10 ** inToken.decimals)).toString()
-    : "0";
+  const amountIn = parsed > 0 ? BigInt(Math.round(parsed * 10 ** tokenIn.decimals)).toString() : "0";
 
   useEffect(() => {
     setQuote(null);
-    if (!parsed || tokenIn === tokenOut) return;
+    if (!parsed || tokenIn.address === tokenOut.address) return;
     setQuoting(true);
     const t = setTimeout(async () => {
       try {
-        const q = await core.getQuote(tokenIn, tokenOut, amountIn);
+        const q = await core.getQuote(tokenIn.address, tokenOut.address, amountIn);
         setQuote(q);
-      } catch {
-        setQuote(null);
-      } finally {
-        setQuoting(false);
-      }
+      } catch { setQuote(null); }
+      finally { setQuoting(false); }
     }, 600);
     return () => clearTimeout(t);
-  }, [amountRaw, tokenIn, tokenOut]);
+  }, [amountRaw, tokenIn.address, tokenOut.address]);
 
   function flip() {
     setTokenIn(tokenOut);
@@ -873,11 +948,25 @@ function SwapScreen({ vault, onBack }: { vault: Vault; onBack: () => void }) {
     setQuote(null);
   }
 
+  function selectToken(side: "in" | "out", tok: SwapToken) {
+    const merged = allTokens.find(t => t.address === tok.address) ? allTokens : [...allTokens, tok];
+    setAllTokens(merged);
+    if (side === "in") {
+      setTokenIn(tok);
+      if (tok.address === tokenOut.address) setTokenOut(tokenIn);
+    } else {
+      setTokenOut(tok);
+      if (tok.address === tokenIn.address) setTokenIn(tokenOut);
+    }
+    setAmountRaw("");
+    setQuote(null);
+  }
+
   async function submit() {
     setLoading(true);
     try {
       const cosignKey = privateKeyToAddress(vault.shardAPrivKey);
-      const cd = await core.buildSwap(cosignKey, vault.apiKey, tokenIn, tokenOut, amountIn);
+      const cd = await core.buildSwap(cosignKey, vault.apiKey, tokenIn.address, tokenOut.address, amountIn);
       const hash = await buildAndSubmit(vault, cd.callData, BigInt(cd.value));
       haptic("success");
       setTxResult({ ok: true, hash });
@@ -891,7 +980,8 @@ function SwapScreen({ vault, onBack }: { vault: Vault; onBack: () => void }) {
   }
 
   const outAmount = quote
-    ? (Number(BigInt(quote.amountOut)) / 10 ** outToken.decimals).toFixed(outToken.decimals === 6 ? 4 : 6).replace(/\.?0+$/, "")
+    ? (Number(BigInt(quote.amountOut)) / 10 ** tokenOut.decimals)
+        .toFixed(tokenOut.decimals <= 6 ? 4 : 6).replace(/\.?0+$/, "")
     : "";
 
   if (step === "result" && txResult) {
@@ -923,26 +1013,43 @@ function SwapScreen({ vault, onBack }: { vault: Vault; onBack: () => void }) {
 
   return (
     <div className="screen send-screen">
+      {picker && (
+        <SwapTokenModal
+          walletAddress={vault.address}
+          exclude={picker === "in" ? tokenIn.address : tokenOut.address}
+          onSelect={tok => selectToken(picker, tok)}
+          onClose={() => setPicker(null)}
+        />
+      )}
+
       <button className="back" onClick={onBack}>← Back</button>
-      <h2 className="title title--sm">Swap</h2>
+
+      <div className="swap-header">
+        <h2 className="title title--sm">Swap</h2>
+        <div className="swap-powered">
+          <span>powered by</span>
+          <img src="/icons8-uniswap-64.png" alt="Uniswap" className="swap-uniswap-logo" />
+        </div>
+      </div>
 
       <div className="swap-panel">
         <div className="swap-side">
           <span className="swap-side__label">You pay</span>
-          <select className="swap-token-select" value={tokenIn} onChange={e => { setTokenIn(e.target.value); setAmountRaw(""); setQuote(null); }}>
-            {SWAP_TOKENS.filter(t => t.address !== tokenOut).map(t => (
-              <option key={t.address} value={t.address}>{t.symbol}</option>
-            ))}
-          </select>
-          <input
-            ref={amountRef}
-            className="swap-amount-input"
-            type="text"
-            inputMode="decimal"
-            placeholder="0"
-            value={amountRaw}
-            onChange={e => setAmountRaw(e.target.value.replace(/[^0-9.]/g, "").replace(/(\..*?)\./g, "$1"))}
-          />
+          <div className="swap-side__row">
+            <button className="swap-tok-btn" onClick={() => setPicker("in")}>
+              <SwapTokenLogo logo={tokenIn.logo} symbol={tokenIn.symbol} size={24} />
+              <span>{tokenIn.symbol}</span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M6 9l6 6 6-6"/></svg>
+            </button>
+            <input
+              className="swap-amount-input"
+              type="text"
+              inputMode="decimal"
+              placeholder="0"
+              value={amountRaw}
+              onChange={e => setAmountRaw(e.target.value.replace(/[^0-9.]/g, "").replace(/(\..*?)\./g, "$1"))}
+            />
+          </div>
         </div>
 
         <button className="swap-flip-btn" onClick={flip} aria-label="Flip tokens">
@@ -953,13 +1060,17 @@ function SwapScreen({ vault, onBack }: { vault: Vault; onBack: () => void }) {
 
         <div className="swap-side">
           <span className="swap-side__label">You receive</span>
-          <select className="swap-token-select" value={tokenOut} onChange={e => { setTokenOut(e.target.value); setQuote(null); }}>
-            {SWAP_TOKENS.filter(t => t.address !== tokenIn).map(t => (
-              <option key={t.address} value={t.address}>{t.symbol}</option>
-            ))}
-          </select>
-          <div className="swap-amount-out">
-            {quoting ? <span className="swap-amount-out__loading">…</span> : (outAmount || <span className="swap-amount-out__empty">—</span>)}
+          <div className="swap-side__row">
+            <button className="swap-tok-btn" onClick={() => setPicker("out")}>
+              <SwapTokenLogo logo={tokenOut.logo} symbol={tokenOut.symbol} size={24} />
+              <span>{tokenOut.symbol}</span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M6 9l6 6 6-6"/></svg>
+            </button>
+            <div className="swap-amount-out">
+              {quoting
+                ? <span className="swap-amount-out__loading">…</span>
+                : outAmount || <span className="swap-amount-out__empty">—</span>}
+            </div>
           </div>
         </div>
       </div>
@@ -967,15 +1078,11 @@ function SwapScreen({ vault, onBack }: { vault: Vault; onBack: () => void }) {
       {quote && (
         <div className="swap-meta">
           <span>Fee tier: {quote.fee / 10000}%</span>
-          <span>1 {inToken.symbol} ≈ {(Number(BigInt(quote.amountOut)) / 10 ** outToken.decimals / parsed).toFixed(4)} {outToken.symbol}</span>
+          <span>1 {tokenIn.symbol} ≈ {(Number(BigInt(quote.amountOut)) / 10 ** tokenOut.decimals / parsed).toFixed(4)} {tokenOut.symbol}</span>
         </div>
       )}
 
-      <button
-        className="btn btn--primary"
-        onClick={submit}
-        disabled={loading || !quote || parsed <= 0}
-      >
+      <button className="btn btn--primary" onClick={submit} disabled={loading || !quote || parsed <= 0}>
         {loading ? "Swapping…" : "Swap"}
       </button>
     </div>
