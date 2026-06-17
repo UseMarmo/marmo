@@ -422,13 +422,30 @@ export async function buildAndSubmit(
   const sigB = await core.cosign(cosignKey, vault.apiKey, userOpHash);
   const signature = `0x${sigA.slice(2)}${sigB.slice(2)}` as `0x${string}`;
 
+  const hex = (n: bigint) => `0x${n.toString(16)}`;
+  const unpackedUserOp = {
+    sender,
+    nonce: hex(nonce),
+    callData,
+    callGasLimit: hex(callGasLimit),
+    verificationGasLimit: hex(verificationGasLimit),
+    preVerificationGas: hex(preVerificationGas),
+    maxFeePerGas: hex(maxFeePerGas),
+    maxPriorityFeePerGas: hex(maxPriorityFeePerGas),
+    paymaster: null,
+    paymasterVerificationGasLimit: "0x0",
+    paymasterPostOpGasLimit: "0x0",
+    paymasterData: "0x",
+    signature,
+  };
+
   const res = await fetch(BUNDLER_URL, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
       jsonrpc: "2.0", id: 1,
       method: "eth_sendUserOperation",
-      params: [{ ...userOpForHash, nonce: `0x${nonce.toString(16)}`, preVerificationGas: `0x${preVerificationGas.toString(16)}`, paymasterAndData: "0x", signature }, ENTRY_POINT],
+      params: [unpackedUserOp, ENTRY_POINT],
     }),
   });
 
