@@ -941,6 +941,31 @@ function SwapTokenModal({
   );
 }
 
+const STABLE_ADDRESSES = new Set([
+  "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+  "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2",
+  "0x50c5725949a6f0c72e6c4a641f24049a917db0cb",
+]);
+const WETH_BASE = "0x4200000000000000000000000000000000000006";
+
+async function fetchEthUsdPrice(): Promise<number | null> {
+  try {
+    const r = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd");
+    const d = await r.json() as { ethereum?: { usd?: number } };
+    return d.ethereum?.usd ?? null;
+  } catch { return null; }
+}
+
+function usdLabel(address: string, balance: string, ethPrice: number | null): string | null {
+  const bal = parseFloat(balance);
+  if (!bal) return null;
+  if (STABLE_ADDRESSES.has(address.toLowerCase())) return `$${bal.toFixed(2)}`;
+  if (address.toLowerCase() === WETH_BASE && ethPrice) {
+    return `$${(bal * ethPrice).toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
+  }
+  return null;
+}
+
 function SwapScreen({ vault, onBack }: { vault: Vault; onBack: () => void }) {
   const [allTokens, setAllTokens] = useState<SwapToken[]>(SWAP_TOKENS);
   const [tokenIn, setTokenIn] = useState<SwapToken>(SWAP_TOKENS[0]);
@@ -952,9 +977,22 @@ function SwapScreen({ vault, onBack }: { vault: Vault; onBack: () => void }) {
   const [step, setStep] = useState<"input" | "result">("input");
   const [loading, setLoading] = useState(false);
   const [txResult, setTxResult] = useState<TxResult | null>(null);
+  const [walletTokens, setWalletTokens] = useState<WalletToken[]>([]);
+  const [ethPrice, setEthPrice] = useState<number | null>(null);
+  const [slippage, setSlippage] = useState(50);
+  const [showSlippage, setShowSlippage] = useState(false);
+  const [slippageCustom, setSlippageCustom] = useState("");
+
+  useEffect(() => {
+    fetchWalletTokens(vault.address).then(setWalletTokens).catch(() => {});
+    fetchEthUsdPrice().then(setEthPrice).catch(() => {});
+  }, [vault.address]);
 
   const parsed = parseFloat(amountRaw) || 0;
   const amountIn = parsed > 0 ? BigInt(Math.round(parsed * 10 ** tokenIn.decimals)).toString() : "0";
+
+  const balanceIn = walletTokens.find(t => t.address.toLowerCase() === tokenIn.address.toLowerCase())?.balance ?? null;
+  const balanceOut = walletTokens.find(t => t.address.toLowerCase() === tokenOut.address.toLowerCase())?.balance ?? null;
 
   useEffect(() => {
     setQuote(null);
@@ -995,7 +1033,7 @@ function SwapScreen({ vault, onBack }: { vault: Vault; onBack: () => void }) {
     setLoading(true);
     try {
       const cosignKey = privateKeyToAddress(vault.shardAPrivKey);
-      const cd = await core.buildSwap(cosignKey, vault.apiKey, tokenIn.address, tokenOut.address, amountIn);
+      const cd = await core.buildSwap(cosignKey, vault.apiKey, tokenIn.address, tokenOut.address, amountIn, slippage);
       const hash = await buildAndSubmit(vault, cd.callData, BigInt(cd.value));
       haptic("success");
       setTxResult({ ok: true, hash });
@@ -1063,7 +1101,15 @@ function SwapScreen({ vault, onBack }: { vault: Vault; onBack: () => void }) {
 
       <div className="swap-panel">
         <div className="swap-side">
-          <span className="swap-side__label">You pay</span>
+          <div className="swap-side__header">
+            <span className="swap-side__label">You pay</span>
+            {balanceIn && (
+              <span className="swap-side__bal">
+                {balanceIn} {tokenIn.symbol}
+                {usdLabel(tokenIn.address, balanceIn, ethPrice) && <span className="swap-side__usd"> ({usdLabel(tokenIn.address, balanceIn, ethPrice)})</span>}
+              </span>
+            )}
+          </div>
           <div className="swap-side__row">
             <button className="swap-tok-btn" onClick={() => setPicker("in")}>
               <SwapTokenLogo logo={tokenIn.logo} symbol={tokenIn.symbol} size={24} />
@@ -1079,6 +1125,19 @@ function SwapScreen({ vault, onBack }: { vault: Vault; onBack: () => void }) {
               onChange={e => setAmountRaw(e.target.value.replace(/[^0-9.]/g, "").replace(/(\..*?)\./g, "$1"))}
             />
           </div>
+          {balanceIn && parseFloat(balanceIn) > 0 && (
+            <div className="swap-pct-row">
+              {([["50%", 0.5], ["75%", 0.75], ["Max", 1]] as [string, number][]).map(([label, pct]) => (
+                <button key={label} className="swap-pct-btn" onClick={() => {
+                  const val = parseFloat(balanceIn) * pct;
+                  setAmountRaw(val.toFixed(tokenIn.decimals).replace(/\.?0+$/, ""));
+                  setQuote(null);
+                }}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         <button className="swap-flip-btn" onClick={flip} aria-label="Flip tokens">
@@ -1088,7 +1147,15 @@ function SwapScreen({ vault, onBack }: { vault: Vault; onBack: () => void }) {
         </button>
 
         <div className="swap-side">
-          <span className="swap-side__label">You receive</span>
+          <div className="swap-side__header">
+            <span className="swap-side__label">You receive</span>
+            {balanceOut && (
+              <span className="swap-side__bal">
+                {balanceOut} {tokenOut.symbol}
+                {usdLabel(tokenOut.address, balanceOut, ethPrice) && <span className="swap-side__usd"> ({usdLabel(tokenOut.address, balanceOut, ethPrice)})</span>}
+              </span>
+            )}
+          </div>
           <div className="swap-side__row">
             <button className="swap-tok-btn" onClick={() => setPicker("out")}>
               <SwapTokenLogo logo={tokenOut.logo} symbol={tokenOut.symbol} size={24} />
@@ -1126,9 +1193,48 @@ function SwapScreen({ vault, onBack }: { vault: Vault; onBack: () => void }) {
         </div>
       )}
 
-      <button className="btn btn--primary" onClick={submit} disabled={loading || !quote || parsed <= 0}>
-        {loading ? "Swapping…" : "Swap"}
-      </button>
+      <div className="swap-actions">
+        <button className="swap-slippage-toggle" onClick={() => setShowSlippage(s => !s)}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93A10 10 0 0 0 4.93 19.07M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+          Slippage: {slippage / 100}%
+        </button>
+
+        <button className="btn btn--primary swap-submit-btn" onClick={submit} disabled={loading || !quote || parsed <= 0}>
+          {loading
+            ? "Swapping…"
+            : <><img src="/icons8-swap-96.png" width={18} height={18} alt="" style={{ verticalAlign: "middle", marginRight: "0.35rem" }} />Swap</>}
+        </button>
+      </div>
+
+      {showSlippage && (
+        <div className="swap-slippage-panel">
+          <span className="swap-slippage-panel__label">Max slippage</span>
+          <div className="swap-slippage-opts">
+            {[25, 50, 100, 200].map(bps => (
+              <button
+                key={bps}
+                className={`swap-slippage-opt${slippage === bps && !slippageCustom ? " active" : ""}`}
+                onClick={() => { setSlippage(bps); setSlippageCustom(""); }}
+              >
+                {bps / 100}%
+              </button>
+            ))}
+            <input
+              className="swap-slippage-custom"
+              type="text"
+              inputMode="decimal"
+              placeholder="Custom %"
+              value={slippageCustom}
+              onChange={e => {
+                const v = e.target.value.replace(/[^0-9.]/g, "");
+                setSlippageCustom(v);
+                const n = parseFloat(v);
+                if (n > 0 && n <= 50) setSlippage(Math.round(n * 100));
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
