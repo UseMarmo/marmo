@@ -227,6 +227,7 @@ button, input, select, textarea { font-family: inherit; }
 }
 
 .balance__eth small { color: var(--muted); }
+.balance__eth-usd { opacity: 0.65; }
 
 .token-icon {
   border-radius: 50%;

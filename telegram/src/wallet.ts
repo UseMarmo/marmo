@@ -58,6 +58,7 @@ export interface BalanceResult {
   eth: string;
   usdc: string;
   usdValue: string;
+  ethUsdValue: string;
   ethRaw: bigint;
   usdcRaw: bigint;
 }
@@ -342,28 +343,53 @@ export async function fetchEthPrice(): Promise<number> {
   }
 }
 
+const STABLECOIN_ADDRS = new Set([
+  "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+  "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2",
+  "0x50c5725949a6f0c72e6c4a641f24049a917db0cb",
+  "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca",
+]);
+const ETH_LIKE_ADDRS = new Set([
+  "0x4200000000000000000000000000000000000006",
+  "0x2ae3f1ec7f1f5012cfeab0185bfc7aa3cf0dec22",
+]);
+
 export async function getBalance(address: string): Promise<BalanceResult> {
-  const [ethRaw, usdcRaw, ethPrice] = await Promise.all([
-    publicClient.getBalance({ address: address as `0x${string}` }),
-    publicClient.readContract({
-      address: USDC,
-      abi: ERC20_ABI,
-      functionName: "balanceOf",
-      args: [address as `0x${string}`],
-    }) as Promise<bigint>,
+  const addr = address as `0x${string}`;
+
+  const [ethRaw, ethPrice, ...tokenRaws] = await Promise.all([
+    publicClient.getBalance({ address: addr }),
     fetchEthPrice(),
+    ...BASE_TOKENS.map(t =>
+      (publicClient.readContract({ address: t.address, abi: ERC20_ABI, functionName: "balanceOf", args: [addr] }) as Promise<bigint>)
+        .catch(() => 0n)
+    ),
   ]);
+
+  const usdcIdx = BASE_TOKENS.findIndex(t => t.address.toLowerCase() === USDC.toLowerCase());
+  const usdcRaw = usdcIdx >= 0 ? tokenRaws[usdcIdx] : 0n;
 
   const ethNum = parseFloat(formatEther(ethRaw));
   const usdcNum = parseFloat(formatUnits(usdcRaw, 6));
-  const usdTotal = ethNum * ethPrice + usdcNum;
+
+  let usdTotal = ethNum * ethPrice;
+  for (let i = 0; i < BASE_TOKENS.length; i++) {
+    const bal = parseFloat(formatUnits(tokenRaws[i], BASE_TOKENS[i].decimals));
+    if (bal <= 0) continue;
+    const a = BASE_TOKENS[i].address.toLowerCase();
+    if (STABLECOIN_ADDRS.has(a)) usdTotal += bal;
+    else if (ETH_LIKE_ADDRS.has(a)) usdTotal += bal * ethPrice;
+  }
+
+  const fmt = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   return {
     ethRaw,
     usdcRaw,
-    eth: ethNum.toFixed(6),
+    eth: ethNum.toFixed(6).replace(/\.?0+$/, "") || "0",
     usdc: usdcNum.toFixed(2),
-    usdValue: usdTotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    usdValue: fmt(usdTotal),
+    ethUsdValue: fmt(ethNum * ethPrice),
   };
 }
 

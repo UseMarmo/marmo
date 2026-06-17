@@ -316,6 +316,7 @@ function DashboardScreen({
   const [showBgPicker, setShowBgPicker] = useState(false);
   const scrambledUsd = useScramble(balance?.usdValue ?? null);
   const scrambledEth = useScramble(balance?.eth ?? null);
+  const scrambledEthUsd = useScramble(balance?.ethUsdValue ?? null);
   const [cardBg, setCardBg] = useState<string>(
     () => localStorage.getItem("marmo_card_bg") ?? DEFAULT_BG
   );
@@ -353,7 +354,8 @@ function DashboardScreen({
           <span className="balance__usd">$ {scrambledUsd}</span>
           <span className="balance__eth">
             <img src="/eth.png" width={18} height={18} className="token-icon" alt="" />
-            {scrambledEth} <small>ETH</small>
+            {scrambledEth}
+            {balance?.ethUsdValue && <small className="balance__eth-usd"> (${scrambledEthUsd})</small>}
           </span>
         </div>
         <button className="addr" onClick={e => { e.stopPropagation(); copy(); }}>
