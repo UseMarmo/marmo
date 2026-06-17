@@ -21,6 +21,44 @@ import * as core from "./core.js";
 
 type Screen = "loading" | "welcome" | "dashboard" | "send" | "receive";
 
+const SCRAMBLE = "0123456789";
+
+function useScramble(value: string | null): string {
+  const [display, setDisplay] = useState("");
+  const raf = useRef<number | undefined>(undefined);
+
+  useEffect(() => {
+    if (raf.current) cancelAnimationFrame(raf.current);
+    const target = value ?? "0.00";
+    let iter = 0;
+
+    const tick = () => {
+      if (value === null) {
+        setDisplay(target.split("").map(ch =>
+          /\d/.test(ch) ? SCRAMBLE[Math.floor(Math.random() * 10)] : ch
+        ).join(""));
+        raf.current = requestAnimationFrame(tick);
+      } else {
+        const len = target.length;
+        setDisplay(target.split("").map((ch, i) => {
+          if (i < Math.floor(iter)) return ch;
+          return /\d/.test(ch) ? SCRAMBLE[Math.floor(Math.random() * 10)] : ch;
+        }).join(""));
+        iter += len / 14;
+        if (Math.floor(iter) < len) {
+          raf.current = requestAnimationFrame(tick);
+        } else {
+          setDisplay(target);
+        }
+      }
+    };
+    tick();
+    return () => { if (raf.current) cancelAnimationFrame(raf.current); };
+  }, [value]);
+
+  return display;
+}
+
 const tg = window.Telegram?.WebApp;
 
 function haptic(type: "success" | "warning" | "error" = "success") {
@@ -260,6 +298,8 @@ function DashboardScreen({
   const [copied, setCopied] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [showBgPicker, setShowBgPicker] = useState(false);
+  const scrambledUsd = useScramble(balance?.usdValue ?? null);
+  const scrambledEth = useScramble(balance?.eth ?? null);
   const [cardBg, setCardBg] = useState<string>(
     () => localStorage.getItem("marmo_card_bg") ?? DEFAULT_BG
   );
@@ -294,15 +334,11 @@ function DashboardScreen({
           </div>
         </div>
         <div className="balance">
-          {balance ? (
-            <>
-              <span className="balance__usd">$ {balance.usdValue}</span>
-              <span className="balance__eth">
-                <img src="/eth.png" width={18} height={18} className="token-icon" alt="" />
-                {balance.eth} <small>ETH</small>
-              </span>
-            </>
-          ) : <span className="balance__usd">—</span>}
+          <span className="balance__usd">$ {scrambledUsd}</span>
+          <span className="balance__eth">
+            <img src="/eth.png" width={18} height={18} className="token-icon" alt="" />
+            {scrambledEth} <small>ETH</small>
+          </span>
         </div>
         <button className="addr" onClick={copy}>
           {shortAddress(vault.address)}
