@@ -113,7 +113,7 @@ describe("MarmoAccount", function () {
 
   it("factory deploys different salt to different address", async function () {
     const addr0 = await factory.predictAddress(owners, 0n);
-    const addr1 = await factory.getAddress(owners, 1n);
+    const addr1 = await factory.predictAddress(owners, 1n);
     expect(addr0).to.not.equal(addr1);
   });
 });

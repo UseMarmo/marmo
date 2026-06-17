@@ -61,6 +61,7 @@ export interface Vault {
 export interface BalanceResult {
   eth: string;
   usdc: string;
+  usdValue: string;
   ethRaw: bigint;
   usdcRaw: bigint;
 }
@@ -189,8 +190,18 @@ export async function createWallet(): Promise<Vault> {
   return vault;
 }
 
+async function fetchEthPrice(): Promise<number> {
+  try {
+    const res = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd");
+    const data = await res.json() as { ethereum?: { usd?: number } };
+    return data.ethereum?.usd ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
 export async function getBalance(address: string): Promise<BalanceResult> {
-  const [ethRaw, usdcRaw] = await Promise.all([
+  const [ethRaw, usdcRaw, ethPrice] = await Promise.all([
     publicClient.getBalance({ address: address as `0x${string}` }),
     publicClient.readContract({
       address: USDC,
@@ -198,13 +209,19 @@ export async function getBalance(address: string): Promise<BalanceResult> {
       functionName: "balanceOf",
       args: [address as `0x${string}`],
     }) as Promise<bigint>,
+    fetchEthPrice(),
   ]);
+
+  const ethNum = parseFloat(formatEther(ethRaw));
+  const usdcNum = parseFloat(formatUnits(usdcRaw, 6));
+  const usdTotal = ethNum * ethPrice + usdcNum;
 
   return {
     ethRaw,
     usdcRaw,
-    eth: parseFloat(formatEther(ethRaw)).toFixed(6),
-    usdc: parseFloat(formatUnits(usdcRaw, 6)).toFixed(2),
+    eth: ethNum.toFixed(6),
+    usdc: usdcNum.toFixed(2),
+    usdValue: usdTotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
   };
 }
 
