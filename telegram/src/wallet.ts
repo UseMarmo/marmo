@@ -417,9 +417,9 @@ export async function buildAndSubmit(
     });
   }
 
-  const verificationGasLimit = isDeployed ? 200_000n : 500_000n;
-  const callGasLimit = isDeployed ? (value > 0n ? 100_000n : 150_000n) : 200_000n;
-  const preVerificationGas = 60_000n;
+  const verificationGasLimit = isDeployed ? 200_000n : 1_200_000n;
+  const callGasLimit = isDeployed ? (value > 0n ? 100_000n : 150_000n) : 250_000n;
+  const preVerificationGas = 80_000n;
   const maxFeePerGas = feeData.maxFeePerGas ?? 2_000_000n;
   const maxPriorityFeePerGas = feeData.maxPriorityFeePerGas ?? 1_000_000n;
 
