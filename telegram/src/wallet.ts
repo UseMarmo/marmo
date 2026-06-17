@@ -6,7 +6,7 @@ import * as core from "./core.js";
 
 const ENTRY_POINT = "0x0000000071727De22E5E9d8BAf0edAc6f37da032" as const;
 const USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
-const FACTORY_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
+const FACTORY_ADDRESS = "0xCb3351F23174a53a5D30b06c0C985dCd4256432d" as const;
 const BUNDLER_URL = import.meta.env.VITE_BUNDLER_URL ?? "";
 const RP_ID = import.meta.env.VITE_RP_ID ?? "localhost";
 
@@ -147,9 +147,6 @@ async function resolveAddress(
   shardBAddress: `0x${string}`,
   shardCAddress: `0x${string}`,
 ): Promise<`0x${string}`> {
-  if (FACTORY_ADDRESS === "0x0000000000000000000000000000000000000000") {
-    return shardAAddress;
-  }
   return publicClient.readContract({
     address: FACTORY_ADDRESS,
     abi: FACTORY_ABI,
