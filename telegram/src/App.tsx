@@ -1226,31 +1226,46 @@ function SwapScreen({ vault, onBack }: { vault: Vault; onBack: () => void }) {
       </div>
 
       {showSlippage && (
-        <div className="swap-slippage-panel">
-          <span className="swap-slippage-panel__label">Max slippage</span>
-          <div className="swap-slippage-opts">
-            {[25, 50, 100, 200].map(bps => (
-              <button
-                key={bps}
-                className={`swap-slippage-opt${slippage === bps && !slippageCustom ? " active" : ""}`}
-                onClick={() => { setSlippage(bps); setSlippageCustom(""); }}
-              >
-                {bps / 100}%
+        <div className="modal-overlay" onClick={() => setShowSlippage(false)}>
+          <div className="modal-panel" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <span className="modal-title">Slippage tolerance</span>
+              <button className="modal-close" onClick={() => setShowSlippage(false)}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               </button>
-            ))}
-            <input
-              className="swap-slippage-custom"
-              type="text"
-              inputMode="decimal"
-              placeholder="Custom %"
-              value={slippageCustom}
-              onChange={e => {
-                const v = e.target.value.replace(/[^0-9.]/g, "");
-                setSlippageCustom(v);
-                const n = parseFloat(v);
-                if (n > 0 && n <= 50) setSlippage(Math.round(n * 100));
-              }}
-            />
+            </div>
+            <p className="modal-hint">Your swap reverts if the price moves more than this from the quoted rate.</p>
+            <div className="swap-slippage-opts">
+              {[25, 50, 100, 200].map(bps => (
+                <button
+                  key={bps}
+                  className={`swap-slippage-opt${slippage === bps && !slippageCustom ? " active" : ""}`}
+                  onClick={() => { setSlippage(bps); setSlippageCustom(""); }}
+                >
+                  {bps / 100}%
+                </button>
+              ))}
+            </div>
+            <div className="ca-row" style={{ marginTop: "0.9rem" }}>
+              <input
+                className="ca-input"
+                type="text"
+                inputMode="decimal"
+                placeholder="Custom % (e.g. 1.5)"
+                value={slippageCustom}
+                style={{ fontSize: "16px" }}
+                autoComplete="off"
+                onChange={e => {
+                  const v = e.target.value.replace(/[^0-9.]/g, "");
+                  setSlippageCustom(v);
+                  const n = parseFloat(v);
+                  if (n > 0 && n <= 50) setSlippage(Math.round(n * 100));
+                }}
+              />
+            </div>
+            <button className="btn btn--primary" style={{ marginTop: "1rem" }} onClick={() => setShowSlippage(false)}>
+              Done
+            </button>
           </div>
         </div>
       )}
