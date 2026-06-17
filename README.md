@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/logo-circle.png" width="100" height="100" alt="Marmo" />
+</p>
+
 # Marmo
 
 [![Core CI](https://github.com/UseMarmo/marmo/actions/workflows/core.yml/badge.svg)](https://github.com/UseMarmo/marmo/actions/workflows/core.yml)
