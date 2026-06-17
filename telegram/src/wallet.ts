@@ -1,5 +1,5 @@
 import { secp256k1 } from "@noble/curves/secp256k1";
-import { createPublicClient, http, formatEther, formatUnits, bytesToHex, hexToBytes } from "viem";
+import { createPublicClient, http, formatEther, formatUnits, bytesToHex, hexToBytes, parseAbiItem } from "viem";
 import { generatePrivateKey, privateKeyToAddress, privateKeyToAccount } from "viem/accounts";
 import { base } from "viem/chains";
 import * as core from "./core.js";
@@ -195,7 +195,7 @@ export interface WalletToken {
   logo: string;
 }
 
-const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef" as `0x${string}`;
+const TRANSFER_EVENT = parseAbiItem("event Transfer(address indexed from, address indexed to, uint256 value)");
 
 const TOKEN_LOGO_MAP: Record<string, string> = {
   "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913": "/usdc.png",
@@ -213,8 +213,6 @@ const ERC20_META_ABI = [
 
 export async function fetchWalletTokens(address: string): Promise<WalletToken[]> {
   const addr = address as `0x${string}`;
-  const paddedAddr = `0x000000000000000000000000${addr.slice(2).toLowerCase()}` as `0x${string}`;
-
   const currentBlock = await publicClient.getBlockNumber();
   const fromBlock = currentBlock > 500_000n ? currentBlock - 500_000n : 0n;
 
@@ -223,7 +221,8 @@ export async function fetchWalletTokens(address: string): Promise<WalletToken[]>
     publicClient.getLogs({
       fromBlock,
       toBlock: "latest",
-      topics: [TRANSFER_TOPIC, null, paddedAddr],
+      event: TRANSFER_EVENT,
+      args: { to: addr },
     }).catch(() => []),
   ]);
 
