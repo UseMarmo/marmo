@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { privateKeyToAddress } from "viem/accounts";
-import { formatEther } from "viem";
+import { formatEther, formatUnits } from "viem";
 import {
   createWallet,
   vaultExists,
@@ -26,8 +26,8 @@ import {
   type WalletToken,
   type StealthPayment,
   type TxRecord,
-  fetchTxHistory,
-  fetchTokenTxHistory,
+  type TxCursor,
+  fetchTxPage,
   TX_PAGE_SIZE,
 } from "./wallet.js";
 import * as core from "./core.js";
@@ -593,7 +593,7 @@ function DashboardScreen({
   const [ethPrice, setEthPrice] = useState(0);
   const [selectedToken, setSelectedToken] = useState<WalletToken | null>(null);
   const [txList, setTxList] = useState<TxRecord[]>([]);
-  const [txPage, setTxPage] = useState(1);
+  const [txNextCursor, setTxNextCursor] = useState<TxCursor>(null);
   const [txLoading, setTxLoading] = useState(false);
   const [txHasMore, setTxHasMore] = useState(true);
   const scrambledUsd = useScramble(balance?.usdValue ?? null);
@@ -604,31 +604,27 @@ function DashboardScreen({
   );
 
   useEffect(() => {
-    fetchWalletTokens(vault.address).then(setTokens);
-    fetchEthPrice().then(setEthPrice);
+    let stale = false;
+    fetchWalletTokens(vault.address).then(t => { if (!stale) setTokens(t); });
+    fetchEthPrice().then(p => { if (!stale) setEthPrice(p); });
+    return () => { stale = true; };
   }, [vault.address]);
 
   useEffect(() => {
     if (dashTab !== "history" || txList.length > 0) return;
-    loadTxPage(1);
+    loadTxPage(null);
   }, [dashTab]);
 
-  async function loadTxPage(page: number) {
+  async function loadTxPage(cursor: TxCursor = null) {
     setTxLoading(true);
-    const [internal, token] = await Promise.all([
-      fetchTxHistory(vault.address, page),
-      fetchTokenTxHistory(vault.address, page),
-    ]);
-    const merged = [...internal, ...token]
-      .sort((a, b) => Number(b.timeStamp) - Number(a.timeStamp))
-      .slice(0, TX_PAGE_SIZE);
-    if (page === 1) {
-      setTxList(merged);
+    const page = await fetchTxPage(vault.address, cursor);
+    if (!cursor) {
+      setTxList(page.items);
     } else {
-      setTxList(prev => [...prev, ...merged]);
+      setTxList(prev => [...prev, ...page.items]);
     }
-    setTxHasMore(internal.length === TX_PAGE_SIZE || token.length === TX_PAGE_SIZE);
-    setTxPage(page);
+    setTxNextCursor(page.nextCursor);
+    setTxHasMore(page.nextCursor !== null);
     setTxLoading(false);
   }
 
@@ -763,10 +759,10 @@ function DashboardScreen({
           <div className="dash-tx-list">
             {txList.map(tx => {
               const out = tx.from.toLowerCase() === vault.address.toLowerCase();
-              const known = tx.value !== "0" || tx.tokenSymbol;
-              const amount = tx.tokenSymbol
-                ? `${(Number(tx.value) / 10 ** Number(tx.tokenDecimal ?? 18)).toLocaleString("en-US", { maximumFractionDigits: 6 })} ${tx.tokenSymbol}`
-                : tx.value !== "0" ? `${parseFloat(formatEther(BigInt(tx.value))).toLocaleString("en-US", { maximumFractionDigits: 6 })} ETH` : null;
+              const known = (tx.value !== "0" && tx.value !== "") || tx.isToken;
+              const amount = tx.isToken && tx.tokenAmount && tx.tokenSymbol
+                ? `${parseFloat(formatUnits(BigInt(tx.tokenAmount), parseInt(tx.tokenDecimal ?? "18"))).toLocaleString("en-US", { maximumFractionDigits: 6 })} ${tx.tokenSymbol}`
+                : tx.value && tx.value !== "0" ? `${parseFloat(formatEther(BigInt(tx.value))).toLocaleString("en-US", { maximumFractionDigits: 6 })} ETH` : null;
               return (
                 <a key={tx.hash} className="dash-tx-item" href={`https://basescan.org/tx/${tx.hash}`} target="_blank" rel="noopener">
                   <div className="dash-tx-item__icon">
@@ -794,7 +790,7 @@ function DashboardScreen({
             )}
             {txLoading && <p className="dash-empty">Loading…</p>}
             {!txLoading && txHasMore && txList.length > 0 && (
-              <button className="btn btn--ghost dash-load-more" onClick={() => loadTxPage(txPage + 1)}>Load more</button>
+              <button className="btn btn--ghost dash-load-more" onClick={() => loadTxPage(txNextCursor)}>Load more</button>
             )}
             {!txLoading && txList.length > 0 && (
               <p className="dash-basescan-note">

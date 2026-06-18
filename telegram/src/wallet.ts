@@ -459,33 +459,18 @@ export async function fetchTokenByAddress(walletAddress: string, contractAddress
   };
 }
 
+const BLOCKSCOUT = "https://base.blockscout.com/api/v2";
+const tokenCache = new Map<string, { data: WalletToken[]; ts: number }>();
+const TOKEN_CACHE_TTL = 30_000;
+
 export async function fetchWalletTokens(address: string): Promise<WalletToken[]> {
+  const cached = tokenCache.get(address.toLowerCase());
+  if (cached && Date.now() - cached.ts < TOKEN_CACHE_TTL) return cached.data;
+
   const addr = address as `0x${string}`;
-  const customAddresses = loadCustomTokenAddresses(address);
-  const knownAddresses = new Set(BASE_TOKENS.map(t => t.address.toLowerCase()));
-
-  const currentBlock = await publicClient.getBlockNumber();
-  const fromBlock = currentBlock > 9_900n ? currentBlock - 9_900n : 0n;
-  const topicTo = `0x000000000000000000000000${addr.slice(2).toLowerCase()}`;
-
-  const [ethRaw, ...knownResults] = await Promise.all([
+  const [ethRaw, tokensRes] = await Promise.all([
     publicClient.getBalance({ address: addr }),
-    ...BASE_TOKENS.map(async (t) => {
-      try {
-        const bal = await publicClient.readContract({
-          address: t.address, abi: ERC20_ABI, functionName: "balanceOf", args: [addr],
-        }) as bigint;
-        if (bal === 0n) return null;
-        return {
-          address: t.address.toLowerCase(),
-          symbol: t.symbol,
-          decimals: t.decimals,
-          balance: parseFloat(formatUnits(bal, t.decimals))
-            .toFixed(t.decimals > 6 ? 6 : t.decimals).replace(/\.?0+$/, ""),
-          logo: t.logo,
-        } satisfies WalletToken;
-      } catch { return null; }
-    }),
+    fetch(`${BLOCKSCOUT}/addresses/${address}/tokens?type=ERC-20&limit=50`).then(r => r.json()).catch(() => ({ items: [] })),
   ]);
 
   const tokens: WalletToken[] = [{
@@ -496,45 +481,21 @@ export async function fetchWalletTokens(address: string): Promise<WalletToken[]>
     logo: "/eth.png",
   }];
 
-  for (const t of knownResults) if (t) tokens.push(t);
-
-  try {
-    const res = await fetch("https://base-rpc.publicnode.com", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        jsonrpc: "2.0", id: 1, method: "eth_getLogs",
-        params: [{ fromBlock: `0x${fromBlock.toString(16)}`, toBlock: "latest",
-          topics: [TRANSFER_SIG, null, topicTo] }],
-      }),
+  for (const item of (tokensRes.items ?? [])) {
+    const t = item.token;
+    const dec = parseInt(t.decimals ?? "18");
+    const raw = BigInt(item.value ?? "0");
+    if (raw === 0n) continue;
+    tokens.push({
+      address: t.address_hash,
+      symbol: t.symbol ?? "?",
+      decimals: dec,
+      balance: parseFloat(formatUnits(raw, dec)).toFixed(dec > 6 ? 6 : dec).replace(/\.?0+$/, ""),
+      logo: t.icon_url ?? TOKEN_LOGO_MAP[t.address_hash?.toLowerCase()] ?? "",
     });
-    const data = await res.json() as { result?: Array<{ address: string }> };
-    const discovered = (data.result ?? [])
-      .map(l => l.address.toLowerCase())
-      .filter(a => !knownAddresses.has(a));
-    const unique = [...new Set([...discovered, ...customAddresses.filter(a => !knownAddresses.has(a))])];
+  }
 
-    const extra = await Promise.all(unique.map(async (contract) => {
-      try {
-        const c = contract as `0x${string}`;
-        const [bal, sym, dec] = await Promise.all([
-          publicClient.readContract({ address: c, abi: ERC20_ABI, functionName: "balanceOf", args: [addr] }),
-          publicClient.readContract({ address: c, abi: ERC20_ABI, functionName: "symbol" }),
-          publicClient.readContract({ address: c, abi: ERC20_ABI, functionName: "decimals" }),
-        ]);
-        if ((bal as bigint) === 0n) return null;
-        const d = Number(dec);
-        return {
-          address: contract, symbol: sym as string, decimals: d,
-          balance: parseFloat(formatUnits(bal as bigint, d))
-            .toFixed(d > 6 ? 6 : d).replace(/\.?0+$/, ""),
-          logo: TOKEN_LOGO_MAP[contract] ?? "",
-        } satisfies WalletToken;
-      } catch { return null; }
-    }));
-    for (const t of extra) if (t) tokens.push(t);
-  } catch {}
-
+  tokenCache.set(address.toLowerCase(), { data: tokens, ts: Date.now() });
   return tokens;
 }
 
@@ -557,23 +518,72 @@ export interface TxRecord {
 
 export const TX_PAGE_SIZE = 10;
 
-async function basescanFetch(params: Record<string, string>): Promise<TxRecord[]> {
-  try {
-    const p = new URLSearchParams({ module: "account", sort: "desc", ...params });
-    const res = await fetch(`https://api.basescan.org/api?${p}`);
-    const data = await res.json() as { status: string; result: TxRecord[] | string };
-    return data.status === "1" && Array.isArray(data.result) ? data.result : [];
-  } catch {
-    return [];
-  }
+export interface TxRecord {
+  hash: string;
+  from: string;
+  to: string;
+  value: string;
+  status: string;
+  timestamp: string;
+  tokenSymbol?: string;
+  tokenDecimal?: string;
+  tokenAmount?: string;
+  tokenIcon?: string;
+  isToken: boolean;
 }
 
-export async function fetchTxHistory(address: string, page: number): Promise<TxRecord[]> {
-  return basescanFetch({ action: "txlistinternal", address, page: String(page), offset: String(TX_PAGE_SIZE) });
+export type TxCursor = Record<string, string | number> | null;
+
+export interface TxPage {
+  items: TxRecord[];
+  nextCursor: TxCursor;
 }
 
-export async function fetchTokenTxHistory(address: string, page: number): Promise<TxRecord[]> {
-  return basescanFetch({ action: "tokentx", address, page: String(page), offset: String(TX_PAGE_SIZE) });
+export async function fetchTxPage(address: string, cursor: TxCursor = null): Promise<TxPage> {
+  const params = new URLSearchParams({ limit: String(TX_PAGE_SIZE) });
+  if (cursor) Object.entries(cursor).forEach(([k, v]) => params.set(k, String(v)));
+
+  const [txRes, tokRes] = await Promise.all([
+    fetch(`${BLOCKSCOUT}/addresses/${address}/transactions?${params}`).then(r => r.json()).catch(() => ({ items: [], next_page_params: null })),
+    fetch(`${BLOCKSCOUT}/addresses/${address}/token-transfers?${params}&type=ERC-20`).then(r => r.json()).catch(() => ({ items: [], next_page_params: null })),
+  ]);
+
+  const normal: TxRecord[] = (txRes.items ?? []).map((tx: Record<string, unknown>) => ({
+    hash: tx.hash as string,
+    from: (tx.from as Record<string, string>)?.hash ?? "",
+    to: (tx.to as Record<string, string>)?.hash ?? "",
+    value: tx.value as string ?? "0",
+    status: tx.status as string ?? "ok",
+    timestamp: tx.timestamp as string ?? "",
+    isToken: false,
+  }));
+
+  const token: TxRecord[] = (tokRes.items ?? []).map((tx: Record<string, unknown>) => {
+    const t = tx.token as Record<string, string>;
+    const total = tx.total as Record<string, string>;
+    return {
+      hash: tx.transaction_hash as string,
+      from: (tx.from as Record<string, string>)?.hash ?? "",
+      to: (tx.to as Record<string, string>)?.hash ?? "",
+      value: "0",
+      status: "ok",
+      timestamp: tx.timestamp as string ?? "",
+      isToken: true,
+      tokenSymbol: t?.symbol,
+      tokenDecimal: t?.decimals,
+      tokenAmount: total?.value,
+      tokenIcon: t?.icon_url,
+    };
+  });
+
+  const seen = new Set<string>();
+  const merged = [...normal, ...token]
+    .filter(tx => { if (seen.has(tx.hash)) return false; seen.add(tx.hash); return true; })
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+    .slice(0, TX_PAGE_SIZE);
+
+  const nextCursor = txRes.next_page_params ?? tokRes.next_page_params ?? null;
+  return { items: merged, nextCursor };
 }
 
 export async function fetchEthPrice(): Promise<number> {
