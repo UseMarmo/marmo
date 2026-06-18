@@ -249,7 +249,8 @@ export async function sweepStealthPayment(
 
   if (ethNow < totalGas) {
     const deficit = totalGas - ethNow;
-    const cd = await core.buildSend(vault.address, vault.apiKey, stealthAddress, deficit.toString());
+    const serverKey = privateKeyToAddress(vault.shardAPrivKey);
+    const cd = await core.buildSend(serverKey, vault.apiKey, stealthAddress, deficit.toString());
     const fundHash = await buildAndSubmit(vault, cd.callData, BigInt(cd.value));
     await publicClient.waitForTransactionReceipt({ hash: fundHash as `0x${string}` });
   }

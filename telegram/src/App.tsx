@@ -798,12 +798,13 @@ function SendScreen({ vault, balance, onBack }: { vault: Vault; balance: Balance
     setErr("");
     setTxResult(null);
     try {
+      const serverKey = privateKeyToAddress(vault.shardAPrivKey);
       let hash: string;
       if (tab === "private") {
-        const cd = await core.buildStealthSend(vault.address, vault.apiKey, to, sendAmountWei, token || undefined);
+        const cd = await core.buildStealthSend(serverKey, vault.apiKey, to, sendAmountWei, token || undefined);
         hash = await buildAndSubmit(vault, cd.callData, BigInt(cd.value));
       } else {
-        const cd = await core.buildSend(vault.address, vault.apiKey, to, sendAmountWei, token || undefined);
+        const cd = await core.buildSend(serverKey, vault.apiKey, to, sendAmountWei, token || undefined);
         hash = await buildAndSubmit(vault, cd.callData, BigInt(cd.value));
       }
       haptic("success");
@@ -985,19 +986,24 @@ function SendScreen({ vault, balance, onBack }: { vault: Vault; balance: Balance
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
             Recipient
           </label>
-          <div className="ca-input">
+          <div className="ca-row">
             <input
+              className="ca-input"
               value={to}
               onChange={(e) => setTo(e.target.value.trim())}
+              onPaste={(e) => { const t = e.clipboardData.getData("text").trim(); if (t) { e.preventDefault(); setTo(t); } }}
               placeholder="0x…"
               style={{ fontSize: "16px" }}
+              autoComplete="off"
+              spellCheck={false}
             />
-            <button className="ca-input__paste" onClick={async () => {
-              try {
-                const text = await navigator.clipboard.readText();
-                setTo(text.trim());
-              } catch { setErr("Nothing in clipboard. Long-press the field and tap Paste."); }
-            }}>Paste</button>
+            <button className="ca-paste-btn" onClick={async () => {
+              try { setTo((await navigator.clipboard.readText()).trim()); }
+              catch { setErr("Nothing in clipboard. Long-press the field and tap Paste."); }
+            }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="2" width="6" height="4" rx="1"/><rect x="5" y="6" width="14" height="16" rx="2"/><path d="M9 2H7a2 2 0 0 0-2 2v2"/><path d="M15 2h2a2 2 0 0 1 2 2v2"/></svg>
+              Paste
+            </button>
           </div>
         </div>
       ) : (
@@ -1006,19 +1012,24 @@ function SendScreen({ vault, balance, onBack }: { vault: Vault; balance: Balance
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
             Recipient stealth meta-address
           </label>
-          <div className="ca-input">
+          <div className="ca-row">
             <input
+              className="ca-input"
               value={to}
               onChange={(e) => setTo(e.target.value.trim())}
-              placeholder="0x…(134 chars)"
-              style={{ fontSize: "13px", fontFamily: "monospace" }}
+              onPaste={(e) => { const t = e.clipboardData.getData("text").trim(); if (t) { e.preventDefault(); setTo(t); } }}
+              placeholder="0x… (134 chars)"
+              style={{ fontSize: "13px" }}
+              autoComplete="off"
+              spellCheck={false}
             />
-            <button className="ca-input__paste" onClick={async () => {
-              try {
-                const text = await navigator.clipboard.readText();
-                setTo(text.trim());
-              } catch { setErr("Nothing in clipboard. Long-press the field and tap Paste."); }
-            }}>Paste</button>
+            <button className="ca-paste-btn" onClick={async () => {
+              try { setTo((await navigator.clipboard.readText()).trim()); }
+              catch { setErr("Nothing in clipboard. Long-press the field and tap Paste."); }
+            }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="2" width="6" height="4" rx="1"/><rect x="5" y="6" width="14" height="16" rx="2"/><path d="M9 2H7a2 2 0 0 0-2 2v2"/><path d="M15 2h2a2 2 0 0 1 2 2v2"/></svg>
+              Paste
+            </button>
           </div>
           <p className="send-private-hint">The recipient shares this from their Receive &gt; Private tab.</p>
         </div>
