@@ -5,7 +5,7 @@ import { generatePrivateKey, privateKeyToAddress, privateKeyToAccount } from "vi
 import { hexToBytes } from "viem";
 import { encryptSecret, decryptSecret, newApiKey, newId } from "./crypto.js";
 import { migrate } from "./db/migrate.js";
-import { pingStore, putShard, getShard, putWallet, getWallet, putStealthMeta, putTotp, enableTotp, putVaultKeys, type WalletRecord } from "./store.js";
+import { pingStore, putShard, getShard, putWallet, getWallet, putStealthMeta, putTotp, enableTotp, putVaultKeys, getWalletByContractAddress, type WalletRecord } from "./store.js";
 import { generateTotpSecret, base32Encode, base32Decode, verifyTotp, buildOtpAuthUri } from "./totp.js";
 import { computeStealthAddress, parseMetaAddress, checkAnnouncement } from "./stealth.js";
 import { getAnnouncements, getLatestBlock, NETWORK } from "./chain.js";
@@ -506,7 +506,12 @@ app.post("/v1/wallets/:address/vault-backup", async (c) => {
     return c.json({ error: "vaultKeys required" }, 400);
   }
 
-  await putVaultKeys(address, encryptSecret(body.vaultKeys, VAULT_KEY));
+  let contractAddress: string | undefined;
+  try {
+    const parsed = JSON.parse(body.vaultKeys) as { address?: string };
+    contractAddress = parsed.address;
+  } catch {}
+  await putVaultKeys(address, encryptSecret(body.vaultKeys, VAULT_KEY), contractAddress);
   return c.json({ ok: true });
 });
 
@@ -517,7 +522,7 @@ app.post("/v1/recover", async (c) => {
   }
 
   const address = (body.address as string).toLowerCase();
-  const wallet = await getWallet(address);
+  const wallet = await getWalletByContractAddress(address) ?? await getWallet(address);
   if (!wallet) return c.json({ error: "wallet not found" }, 404);
 
   if (!wallet.totpEnabled || !wallet.totpSecret) {

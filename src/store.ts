@@ -74,8 +74,34 @@ export async function enableTotp(address: string): Promise<void> {
   await sql`update marmo_wallets set totp_enabled = true where address = ${address}`;
 }
 
-export async function putVaultKeys(address: string, encVaultKeys: string): Promise<void> {
-  await sql`update marmo_wallets set enc_vault_keys = ${encVaultKeys} where address = ${address}`;
+export async function putVaultKeys(address: string, encVaultKeys: string, contractAddress?: string): Promise<void> {
+  if (contractAddress) {
+    await sql`update marmo_wallets set enc_vault_keys = ${encVaultKeys}, contract_address = ${contractAddress.toLowerCase()} where address = ${address}`;
+  } else {
+    await sql`update marmo_wallets set enc_vault_keys = ${encVaultKeys} where address = ${address}`;
+  }
+}
+
+export async function getWalletByContractAddress(contractAddress: string): Promise<WalletRecord | undefined> {
+  const rows = await sql`
+    select address, shard_id, api_key_hash, shard_a_address, shard_c_address,
+           stealth_meta_address, enc_view_priv, totp_secret, totp_enabled, enc_vault_keys, created_at
+    from marmo_wallets where contract_address = ${contractAddress.toLowerCase()}`;
+  const row = rows[0];
+  if (!row) return undefined;
+  return {
+    address: row.address,
+    shardId: row.shard_id,
+    apiKeyHash: row.api_key_hash,
+    shardAAddress: row.shard_a_address,
+    shardCAddress: row.shard_c_address,
+    stealthMetaAddress: row.stealth_meta_address ?? undefined,
+    encViewPriv: row.enc_view_priv ?? undefined,
+    totpSecret: row.totp_secret ?? undefined,
+    totpEnabled: row.totp_enabled ?? false,
+    encVaultKeys: row.enc_vault_keys ?? undefined,
+    createdAt: row.created_at,
+  };
 }
 
 export async function getWallet(address: string): Promise<WalletRecord | undefined> {
