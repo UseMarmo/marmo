@@ -361,6 +361,22 @@ button, input, select, textarea { font-family: inherit; }
 }
 .totp-banner__dismiss:hover { color: var(--ink); }
 
+.backup-err-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: var(--radius-sm);
+  padding: 0.65rem 0.9rem;
+  font-size: 0.75rem;
+  color: #fca5a5;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+}
+.backup-err-banner:hover { background: rgba(239, 68, 68, 0.16); }
+
 .totp-setup__hint {
   font-size: 0.83rem;
   color: var(--ink-muted);

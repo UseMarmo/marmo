@@ -227,11 +227,13 @@ export async function recoverWallet(address: string, code: string): Promise<stri
 }
 
 export async function uploadVaultBackup(address: string, apiKey: string, vaultKeys: string): Promise<void> {
-  await coreFetch(`/v1/wallets/${address}/vault-backup`, {
+  const res = await coreFetch(`/v1/wallets/${address}/vault-backup`, {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({ vaultKeys }),
   });
+  const data = (await res.json().catch(() => ({}))) as { error?: string };
+  if (!res.ok) throw new Error(data.error ?? "Vault backup failed");
 }
 
 export async function getTotpStatus(address: string, apiKey: string): Promise<boolean> {

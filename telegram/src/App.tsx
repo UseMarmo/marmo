@@ -191,6 +191,7 @@ export default function App() {
   const [vault, setVault] = useState<Vault | null>(null);
   const [balance, setBalance] = useState<BalanceResult | null>(null);
   const [error, setError] = useState("");
+  const [backupErr, setBackupErr] = useState("");
 
   const navigate = useCallback((s: Screen) => {
     setError("");
@@ -214,7 +215,12 @@ export default function App() {
         await verifyPasskey(v.credentialId);
         setVault(v);
         navigate("dashboard");
-        ensureVaultBackup(v).catch(() => {});
+        if (v.totpEnabled) {
+          ensureVaultBackup(v).catch((e) => {
+            console.error("[backup]", e);
+            setBackupErr(errMsg(e));
+          });
+        }
       } catch {
         navigate("welcome");
       }
@@ -265,6 +271,11 @@ export default function App() {
         onSwap={() => navigate("swap")}
         onRefresh={refreshBalance}
         onSetupTotp={() => navigate("setup-totp")}
+        backupErr={backupErr}
+        onRetryBackup={() => {
+          setBackupErr("");
+          ensureVaultBackup(vault).catch((e) => setBackupErr(errMsg(e)));
+        }}
       />
     );
   }
@@ -523,6 +534,8 @@ function DashboardScreen({
   onSwap,
   onRefresh,
   onSetupTotp,
+  backupErr,
+  onRetryBackup,
 }: {
   vault: Vault;
   balance: BalanceResult | null;
@@ -531,6 +544,8 @@ function DashboardScreen({
   onSwap: () => void;
   onRefresh: () => void;
   onSetupTotp: () => void;
+  backupErr: string;
+  onRetryBackup: () => void;
 }) {
   const [copied, setCopied] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
@@ -602,6 +617,13 @@ function DashboardScreen({
           Swap
         </button>
       </div>
+
+      {backupErr && (
+        <button className="backup-err-banner" onClick={onRetryBackup}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          Recovery backup failed: {backupErr} — tap to retry
+        </button>
+      )}
 
       {!vault.totpEnabled && !bannerDismissed && (
         <div className="totp-banner">
