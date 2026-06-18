@@ -78,8 +78,42 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'Marmo ${{ github.ref_name }}'
-          releaseBody: 'Download the Marmo desktop wallet for your platform below.'
+          releaseBody: |
+            ### Download
+
+            | Platform | File to download |
+            |---|---|
+            | **macOS** Apple Silicon | the `.dmg` ending in `_aarch64.dmg` |
+            | **macOS** Intel | the `.dmg` ending in `_x64.dmg` |
+            | **Windows** | the `-setup.exe` file |
+            | **Linux** (all distros) | `Marmo.flatpak` |
+            | **Linux** Ubuntu / Debian | the `.deb` file |
+            | **Linux** AppImage | the `.AppImage` file |
+
+            After downloading `Marmo.flatpak` run:
+            ```
+            flatpak install --user Marmo.flatpak
+            ```
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
           projectPath: desktop
+
+      - name: Prepare Flatpak sources
+        if: matrix.platform == 'ubuntu-24.04'
+        run: |
+          cp desktop/src-tauri/target/release/marmo-desktop packaging/flatpak/marmo-desktop
+          cp desktop/src-tauri/icons/128x128.png packaging/flatpak/icon.png
+
+      - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        if: matrix.platform == 'ubuntu-24.04'
+        with:
+          bundle: Marmo.flatpak
+          manifest-path: packaging/flatpak/xyz.marmo.Desktop.yml
+          cache-key: flatpak-builder-v1
+
+      - name: Upload Flatpak to release
+        if: matrix.platform == 'ubuntu-24.04'
+        run: gh release upload ${{ github.ref_name }} Marmo.flatpak --clobber
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

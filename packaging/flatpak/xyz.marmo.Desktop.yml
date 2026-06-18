@@ -1,0 +1,27 @@
+app-id: xyz.marmo.Desktop
+runtime: org.gnome.Platform
+runtime-version: '47'
+sdk: org.gnome.Sdk
+command: marmo-desktop
+finish-args:
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  - --share=network
+  - --filesystem=home
+  - --talk-name=org.freedesktop.secrets
+modules:
+  - name: marmo
+    buildsystem: simple
+    build-commands:
+      - install -Dm755 marmo-desktop /app/bin/marmo-desktop
+      - install -Dm644 xyz.marmo.Desktop.desktop /app/share/applications/xyz.marmo.Desktop.desktop
+      - install -Dm644 icon.png /app/share/icons/hicolor/128x128/apps/xyz.marmo.Desktop.png
+    sources:
+      - type: file
+        path: marmo-desktop
+      - type: file
+        path: xyz.marmo.Desktop.desktop
+      - type: file
+        path: icon.png
