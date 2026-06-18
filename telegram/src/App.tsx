@@ -401,6 +401,7 @@ function ReceiveScreen({ vault, onBack }: { vault: Vault; onBack: () => void }) 
   const [registered, setRegistered] = useState(false);
   const [cooldown, setCooldown] = useState(0);
   const [showStealthHelp, setShowStealthHelp] = useState(false);
+  const [hideTiny, setHideTiny] = useState(true);
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -560,6 +561,10 @@ function ReceiveScreen({ vault, onBack }: { vault: Vault; onBack: () => void }) 
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--blue-2)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>
                     <p><strong>Claiming</strong> moves the funds from that one-time address into your main wallet. It is the final step to access what was sent to you privately.</p>
                   </div>
+                  <div className="stealth-help-row">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--blue-2)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                    <p><strong>Hide tiny amounts</strong> filters out leftover dust — trace amounts of ETH (under 0.0001 ETH) left behind after claiming. These are a side-effect of how gas fees work and have no real value.</p>
+                  </div>
                 </div>
                 <button className="btn btn--ghost" style={{ width: "100%", marginTop: "0.5rem" }} onClick={() => setShowStealthHelp(false)}>Got it</button>
               </div>
@@ -576,10 +581,21 @@ function ReceiveScreen({ vault, onBack }: { vault: Vault; onBack: () => void }) 
             </button>
 
             {payments && payments.length > 0 && (
-              <button className="stealth-help-btn" onClick={() => setShowStealthHelp(true)} aria-label="How does this work?">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                How does this work?
-              </button>
+              <div className="stealth-meta-row">
+                <button className="stealth-help-btn" onClick={() => setShowStealthHelp(true)} aria-label="How does this work?">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                  How does this work?
+                </button>
+                <label className="tiny-toggle">
+                  <span className="tiny-toggle__label">Hide tiny amounts</span>
+                  <button
+                    role="switch"
+                    aria-checked={hideTiny}
+                    className={`toggle-pill${hideTiny ? " on" : ""}`}
+                    onClick={() => setHideTiny(v => !v)}
+                  />
+                </label>
+              </div>
             )}
 
             {scanErr && <p className="err">{scanErr}</p>}
@@ -588,30 +604,52 @@ function ReceiveScreen({ vault, onBack }: { vault: Vault; onBack: () => void }) 
               <p className="stealth-scan-empty">No private payments found in the last ~50k blocks.</p>
             )}
 
-            {payments && payments.length > 0 && (
-              <div className="stealth-payment-list">
-                {payments.map(p => (
-                  <div key={p.stealthAddress} className="stealth-payment">
-                    <div className="stealth-payment__assets">
-                      {p.ethRaw > 0n && <span className="stealth-payment__eth">{p.ethBalance} ETH</span>}
-                      {p.tokens.map(t => (
-                        <span key={t.address} className="stealth-payment__eth">
-                          {parseFloat(t.balance).toFixed(t.decimals <= 6 ? 2 : 5).replace(/\.?0+$/, "")} {t.symbol}
-                        </span>
-                      ))}
-                      <span className="stealth-payment__addr">{shortAddress(p.stealthAddress)}</span>
+            {payments && payments.length > 0 && (() => {
+              const DUST_ETH = 100_000_000_000_000n;
+              const DUST_STABLE = 0.005;
+              const DUST_OTHER = 0.000005;
+              const visible = hideTiny
+                ? payments.filter(p => {
+                    if (p.tokens.length > 0) {
+                      const allTokensDust = p.tokens.every(t => {
+                        const threshold = t.decimals <= 6 ? DUST_STABLE : DUST_OTHER;
+                        return parseFloat(t.balance) < threshold;
+                      });
+                      if (!allTokensDust) return true;
+                    }
+                    return p.ethRaw >= DUST_ETH || (p.tokens.length > 0 && p.tokens.some(t => {
+                      const threshold = t.decimals <= 6 ? DUST_STABLE : DUST_OTHER;
+                      return parseFloat(t.balance) >= threshold;
+                    }));
+                  })
+                : payments;
+              return visible.length === 0 ? (
+                <p className="stealth-scan-empty">All payments are dust amounts. Toggle off "Hide tiny amounts" to see them.</p>
+              ) : (
+                <div className="stealth-payment-list">
+                  {visible.map(p => (
+                    <div key={p.stealthAddress} className="stealth-payment">
+                      <div className="stealth-payment__assets">
+                        {p.ethRaw > 0n && <span className="stealth-payment__eth">{p.ethBalance} ETH</span>}
+                        {p.tokens.map(t => (
+                          <span key={t.address} className="stealth-payment__eth">
+                            {parseFloat(t.balance).toFixed(t.decimals <= 6 ? 2 : 5).replace(/\.?0+$/, "")} {t.symbol}
+                          </span>
+                        ))}
+                        <span className="stealth-payment__addr">{shortAddress(p.stealthAddress)}</span>
+                      </div>
+                      <button
+                        className="btn btn--primary stealth-payment__claim"
+                        onClick={() => sweep(p)}
+                        disabled={sweeping === p.stealthAddress}
+                      >
+                        {sweeping === p.stealthAddress ? "Claiming…" : "Claim"}
+                      </button>
                     </div>
-                    <button
-                      className="btn btn--primary stealth-payment__claim"
-                      onClick={() => sweep(p)}
-                      disabled={sweeping === p.stealthAddress}
-                    >
-                      {sweeping === p.stealthAddress ? "Claiming…" : "Claim"}
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
+                  ))}
+                </div>
+              );
+            })()}
           </div>
         </>
       )}
