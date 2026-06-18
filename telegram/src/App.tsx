@@ -342,25 +342,26 @@ function WelcomeScreen({ onCreated, onRecover }: { onCreated: (v: Vault) => void
   );
 }
 
+type RecoverResult = { ok: true; vault: Vault } | { ok: false; err: string };
+
 function RecoverScreen({ onRecovered, onBack }: { onRecovered: (v: Vault) => void; onBack: () => void }) {
   const [address, setAddress] = useState("");
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState("");
+  const [result, setResult] = useState<RecoverResult | null>(null);
 
   async function recover() {
     const trimmed = address.trim();
-    if (!trimmed.startsWith("0x") || trimmed.length < 42) { setErr("Enter your wallet address (0x…)"); return; }
-    if (!/^\d{6}$/.test(code)) { setErr("Enter the 6-digit code from your authenticator app"); return; }
+    if (!trimmed.startsWith("0x") || trimmed.length < 42) { setResult({ ok: false, err: "Enter your wallet address (0x…)" }); return; }
+    if (!/^\d{6}$/.test(code)) { setResult({ ok: false, err: "Enter the 6-digit code from your authenticator app" }); return; }
     setLoading(true);
-    setErr("");
     try {
       const v = await recoverFromTotp(trimmed, code);
       haptic("success");
-      onRecovered(v);
+      setResult({ ok: true, vault: v });
     } catch (e) {
       haptic("error");
-      setErr(errMsg(e));
+      setResult({ ok: false, err: errMsg(e) });
     } finally {
       setLoading(false);
     }
@@ -369,6 +370,47 @@ function RecoverScreen({ onRecovered, onBack }: { onRecovered: (v: Vault) => voi
   async function paste() {
     const text = await navigator.clipboard.readText().catch(() => "");
     if (text) setAddress(text.trim());
+  }
+
+  if (result?.ok) {
+    return (
+      <div className="screen send-screen">
+        <div className="tx-result">
+          <svg className="tx-result__icon" viewBox="0 0 72 72" fill="none">
+            <circle cx="36" cy="36" r="36" fill="rgba(34,197,94,0.12)" />
+            <circle cx="36" cy="36" r="28" fill="rgba(34,197,94,0.18)" />
+            <path d="M24 36l9 9 15-15" stroke="#4ade80" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <p className="tx-result__title">Wallet recovered</p>
+          <p className="tx-result__sub">Your wallet is restored on this device and ready to use.</p>
+          <button className="btn btn--primary" style={{ width: "100%" }} onClick={() => onRecovered(result.vault)}>
+            Go to wallet
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (result && !result.ok) {
+    return (
+      <div className="screen send-screen">
+        <div className="tx-result">
+          <svg className="tx-result__icon" viewBox="0 0 72 72" fill="none">
+            <circle cx="36" cy="36" r="36" fill="rgba(239,68,68,0.1)" />
+            <circle cx="36" cy="36" r="28" fill="rgba(239,68,68,0.15)" />
+            <path d="M26 26l20 20M46 26L26 46" stroke="#f87171" strokeWidth="3.5" strokeLinecap="round" />
+          </svg>
+          <p className="tx-result__title">Recovery failed</p>
+          <p className="tx-result__err">{result.err}</p>
+          <button className="btn btn--primary" style={{ width: "100%" }} onClick={() => setResult(null)}>
+            Try again
+          </button>
+          <button className="btn btn--ghost" style={{ width: "100%" }} onClick={onBack}>
+            Back
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -415,8 +457,6 @@ function RecoverScreen({ onRecovered, onBack }: { onRecovered: (v: Vault) => voi
           onChange={e => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
         />
       </div>
-
-      {err && <p className="err">{err}</p>}
 
       <button className="btn btn--primary" onClick={recover} disabled={loading || !address || code.length !== 6}>
         {loading ? "Recovering…" : "Recover wallet"}
