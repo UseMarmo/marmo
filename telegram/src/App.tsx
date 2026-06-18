@@ -376,11 +376,7 @@ function RecoverScreen({ onRecovered, onBack }: { onRecovered: (v: Vault) => voi
     return (
       <div className="screen send-screen">
         <div className="tx-result">
-          <svg className="tx-result__icon" viewBox="0 0 72 72" fill="none">
-            <circle cx="36" cy="36" r="36" fill="rgba(34,197,94,0.12)" />
-            <circle cx="36" cy="36" r="28" fill="rgba(34,197,94,0.18)" />
-            <path d="M24 36l9 9 15-15" stroke="#4ade80" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+          <img src="/icons8-success-96.png" className="tx-result__icon" alt="" />
           <p className="tx-result__title">Wallet recovered</p>
           <p className="tx-result__sub">Your wallet is restored on this device and ready to use.</p>
           <button className="btn btn--primary" style={{ width: "100%" }} onClick={() => onRecovered(result.vault)}>
@@ -395,11 +391,7 @@ function RecoverScreen({ onRecovered, onBack }: { onRecovered: (v: Vault) => voi
     return (
       <div className="screen send-screen">
         <div className="tx-result">
-          <svg className="tx-result__icon" viewBox="0 0 72 72" fill="none">
-            <circle cx="36" cy="36" r="36" fill="rgba(239,68,68,0.1)" />
-            <circle cx="36" cy="36" r="28" fill="rgba(239,68,68,0.15)" />
-            <path d="M26 26l20 20M46 26L26 46" stroke="#f87171" strokeWidth="3.5" strokeLinecap="round" />
-          </svg>
+          <img src="/icons8-fail-96.png" className="tx-result__icon" alt="" />
           <p className="tx-result__title">Recovery failed</p>
           <p className="tx-result__err">{result.err}</p>
           <button className="btn btn--primary" style={{ width: "100%" }} onClick={() => setResult(null)}>
