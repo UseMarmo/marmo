@@ -463,14 +463,24 @@ const BLOCKSCOUT = "https://base.blockscout.com/api/v2";
 const tokenCache = new Map<string, { data: WalletToken[]; ts: number }>();
 const TOKEN_CACHE_TTL = 30_000;
 
+function fmtBalance(raw: bigint, dec: number): string {
+  return parseFloat(formatUnits(raw, dec)).toFixed(dec > 6 ? 6 : dec).replace(/\.?0+$/, "");
+}
+
 export async function fetchWalletTokens(address: string): Promise<WalletToken[]> {
   const cached = tokenCache.get(address.toLowerCase());
   if (cached && Date.now() - cached.ts < TOKEN_CACHE_TTL) return cached.data;
 
   const addr = address as `0x${string}`;
-  const [ethRaw, tokensRes] = await Promise.all([
+  const customAddresses = loadCustomTokenAddresses(address);
+
+  const [ethRaw, tokensRes, ...knownRaws] = await Promise.all([
     publicClient.getBalance({ address: addr }),
     fetch(`${BLOCKSCOUT}/addresses/${address}/tokens?type=ERC-20`).then(r => r.json()).catch(() => ({ items: [] })),
+    ...BASE_TOKENS.map(t =>
+      (publicClient.readContract({ address: t.address, abi: ERC20_ABI, functionName: "balanceOf", args: [addr] }) as Promise<bigint>)
+        .catch(() => 0n)
+    ),
   ]);
 
   const tokens: WalletToken[] = [{
@@ -481,19 +491,60 @@ export async function fetchWalletTokens(address: string): Promise<WalletToken[]>
     logo: "/eth.png",
   }];
 
+  const seen = new Set<string>();
+
+  BASE_TOKENS.forEach((t, i) => {
+    const raw = knownRaws[i] as bigint;
+    if (raw <= 0n) return;
+    const a = t.address.toLowerCase();
+    seen.add(a);
+    tokens.push({
+      address: a,
+      symbol: t.symbol,
+      decimals: t.decimals,
+      balance: fmtBalance(raw, t.decimals),
+      logo: t.logo,
+    });
+  });
+
   for (const item of (tokensRes.items ?? [])) {
     const t = item.token;
+    const ca = (t.address_hash ?? "").toLowerCase();
+    if (!ca || seen.has(ca)) continue;
     const dec = parseInt(t.decimals ?? "18");
     const raw = BigInt(item.value ?? "0");
     if (raw === 0n) continue;
+    seen.add(ca);
     tokens.push({
-      address: t.address_hash,
+      address: ca,
       symbol: t.symbol ?? "?",
       decimals: dec,
-      balance: parseFloat(formatUnits(raw, dec)).toFixed(dec > 6 ? 6 : dec).replace(/\.?0+$/, ""),
-      logo: t.icon_url ?? TOKEN_LOGO_MAP[t.address_hash?.toLowerCase()] ?? "",
+      balance: fmtBalance(raw, dec),
+      logo: t.icon_url ?? TOKEN_LOGO_MAP[ca] ?? "",
     });
   }
+
+  const customUnseen = customAddresses.filter(a => !seen.has(a.toLowerCase()));
+  const customResults = await Promise.all(customUnseen.map(async (contract) => {
+    try {
+      const c = contract as `0x${string}`;
+      const [bal, sym, dec] = await Promise.all([
+        publicClient.readContract({ address: c, abi: ERC20_ABI, functionName: "balanceOf", args: [addr] }) as Promise<bigint>,
+        publicClient.readContract({ address: c, abi: ERC20_ABI, functionName: "symbol" }) as Promise<string>,
+        publicClient.readContract({ address: c, abi: ERC20_ABI, functionName: "decimals" }) as Promise<number>,
+      ]);
+      if (bal <= 0n) return null;
+      const d = Number(dec);
+      return {
+        address: contract.toLowerCase(),
+        symbol: sym,
+        decimals: d,
+        balance: fmtBalance(bal, d),
+        logo: TOKEN_LOGO_MAP[contract.toLowerCase()] ?? "",
+      } satisfies WalletToken;
+    } catch { return null; }
+  }));
+  for (const t of customResults) if (t) tokens.push(t);
 
   tokenCache.set(address.toLowerCase(), { data: tokens, ts: Date.now() });
   return tokens;

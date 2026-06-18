@@ -592,6 +592,7 @@ function DashboardScreen({
   const [ethPrice, setEthPrice] = useState(0);
   const [priceOffline, setPriceOffline] = useState(false);
   const [selectedToken, setSelectedToken] = useState<WalletToken | null>(null);
+  const [showAddToken, setShowAddToken] = useState(false);
   const [txBuffer, setTxBuffer] = useState<TxRecord[]>([]);
   const [txShown, setTxShown] = useState(0);
   const [txState, setTxState] = useState<TxFetchState | null>(null);
@@ -792,6 +793,10 @@ function DashboardScreen({
                 {tokens.every(t => parseFloat(t.balance) === 0) && (
                   <p className="dash-empty">No tokens yet</p>
                 )}
+                <p className="dash-basescan-note">
+                  Not seeing a token?{" "}
+                  <button className="dash-add-token-link" onClick={() => setShowAddToken(true)}>Add token</button>
+                </p>
               </div>
             )}
 
@@ -845,6 +850,13 @@ function DashboardScreen({
       </div>
 
       {selectedToken && <TokenDrawer token={selectedToken} ethPrice={ethPrice} onClose={() => setSelectedToken(null)} />}
+      {showAddToken && (
+        <AddTokenModal
+          walletAddress={vault.address}
+          onAdd={(tok) => setTokens(prev => prev.some(t => t.address.toLowerCase() === tok.address.toLowerCase()) ? prev : [...prev, tok])}
+          onClose={() => setShowAddToken(false)}
+        />
+      )}
     </div>
   );
 }
@@ -942,6 +954,14 @@ type ClaimResult = { ok: true; hashes: string[] } | { ok: false; err: string };
 
 function ReceiveScreen({ vault, onBack }: { vault: Vault; onBack: () => void }) {
   const [tab, setTab] = useState<"standard" | "private">("standard");
+  const [slideDir, setSlideDir] = useState<"left" | "right">("right");
+
+  function switchReceiveTab(next: "standard" | "private") {
+    if (next === tab) return;
+    setSlideDir(next === "private" ? "right" : "left");
+    setTab(next);
+  }
+
   const [scanning, setScanning] = useState(false);
   const [payments, setPayments] = useState<StealthPayment[] | null>(null);
   const [scanErr, setScanErr] = useState("");
@@ -1047,13 +1067,15 @@ function ReceiveScreen({ vault, onBack }: { vault: Vault; onBack: () => void }) 
       <h2 className="title title--sm">Receive</h2>
 
       <div className="receive-tabs">
-        <button className={`receive-tab${tab === "standard" ? " active" : ""}`} onClick={() => setTab("standard")}>Standard</button>
-        <button className={`receive-tab${tab === "private" ? " active" : ""}`} onClick={() => setTab("private")}>
+        <button className={`receive-tab${tab === "standard" ? " active" : ""}`} onClick={() => switchReceiveTab("standard")}>Standard</button>
+        <button className={`receive-tab${tab === "private" ? " active" : ""}`} onClick={() => switchReceiveTab("private")}>
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{marginRight:"0.3rem"}}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
           Private
         </button>
       </div>
 
+      <div className="dash-panel-viewport">
+      <div key={tab} className={`dash-panel dash-panel--${slideDir}`}>
       {tab === "standard" && (
         <>
           <div className="qr-wrap">
@@ -1203,6 +1225,8 @@ function ReceiveScreen({ vault, onBack }: { vault: Vault; onBack: () => void }) 
           </div>
         </>
       )}
+      </div>
+      </div>
     </div>
   );
 }
@@ -1365,6 +1389,7 @@ type SendStep = "input" | "preview" | "result";
 function SendScreen({ vault, balance, onBack }: { vault: Vault; balance: BalanceResult | null; onBack: () => void }) {
   const [tab, setTab] = useState<"standard" | "private">("standard");
   const [step, setStep] = useState<SendStep>("input");
+  const [anim, setAnim] = useState<"in" | "out">("in");
   const [tokens, setTokens] = useState<WalletToken[]>([{ address: "", symbol: "ETH", decimals: 18, balance: "0", logo: "/eth.png" }]);
   const [token, setToken] = useState("");
   const [showAddToken, setShowAddToken] = useState(false);
@@ -1385,6 +1410,11 @@ function SendScreen({ vault, balance, onBack }: { vault: Vault; balance: Balance
   useEffect(() => {
     if (step === "input") setTimeout(() => amountRef.current?.focus(), 80);
   }, [step]);
+
+  function goStep(s: SendStep) {
+    setAnim("out");
+    setTimeout(() => { setStep(s); setAnim("in"); }, 150);
+  }
 
   const tokenInfo = tokens.find(t => t.address === token) ?? tokens[0];
   const isStablecoin = token !== "" && (tokenInfo.symbol === "USDC" || tokenInfo.symbol === "USDT" || tokenInfo.symbol === "DAI");
@@ -1431,7 +1461,7 @@ function SendScreen({ vault, balance, onBack }: { vault: Vault; balance: Balance
       if (!to.startsWith("0x") || to.length !== 134) { setErr("Enter a valid stealth meta-address (134 chars)"); return; }
     }
     setErr("");
-    setStep("preview");
+    goStep("preview");
   }
 
   async function submit() {
@@ -1450,11 +1480,11 @@ function SendScreen({ vault, balance, onBack }: { vault: Vault; balance: Balance
       }
       haptic("success");
       setTxResult({ ok: true, hash });
-      setStep("result");
+      goStep("result");
     } catch (e) {
       haptic("error");
       setTxResult({ ok: false, message: errMsg(e) });
-      setStep("result");
+      goStep("result");
     } finally {
       setLoading(false);
     }
@@ -1464,7 +1494,7 @@ function SendScreen({ vault, balance, onBack }: { vault: Vault; balance: Balance
     const short = txResult.ok ? `${txResult.hash.slice(0, 10)}…${txResult.hash.slice(-8)}` : "";
     const sentTitle = txResult.ok ? (tab === "private" ? "Sent privately!" : "Sent!") : "Transaction Failed";
     return (
-      <div className="screen send-screen tx-result">
+      <div key="result" className={`screen send-screen tx-result screen-anim screen-anim--${anim}`}>
         <img
           src={txResult.ok ? "/icons8-success-96.png" : "/icons8-fail-96.png"}
           className="tx-result__icon"
@@ -1500,8 +1530,8 @@ function SendScreen({ vault, balance, onBack }: { vault: Vault; balance: Balance
 
   if (step === "preview") {
     return (
-      <div className="screen send-screen">
-        <button className="back" onClick={() => { setStep("input"); setErr(""); }}>← Edit</button>
+      <div key="preview" className={`screen send-screen screen-anim screen-anim--${anim}`}>
+        <button className="back" onClick={() => { goStep("input"); setErr(""); }}>← Edit</button>
         <h2 className="title title--sm">Review</h2>
 
         <div className="preview-card">
@@ -1551,7 +1581,7 @@ function SendScreen({ vault, balance, onBack }: { vault: Vault; balance: Balance
   }
 
   return (
-    <div className="screen send-screen">
+    <div key="input" className={`screen send-screen screen-anim screen-anim--${anim}`}>
       {showAddToken && (
         <AddTokenModal
           walletAddress={vault.address}
