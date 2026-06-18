@@ -388,13 +388,16 @@ function DashboardScreen({
   );
 }
 
+type ClaimResult = { ok: true; hashes: string[] } | { ok: false; err: string };
+
 function ReceiveScreen({ vault, onBack }: { vault: Vault; onBack: () => void }) {
   const [tab, setTab] = useState<"standard" | "private">("standard");
   const [scanning, setScanning] = useState(false);
   const [payments, setPayments] = useState<StealthPayment[] | null>(null);
   const [scanErr, setScanErr] = useState("");
   const [sweeping, setSweeping] = useState<string | null>(null);
-  const [sweepResult, setSweepResult] = useState<Record<string, { ok: boolean; hashes?: string[]; err?: string }>>({});
+  const [claimResult, setClaimResult] = useState<ClaimResult | null>(null);
+
   const [registered, setRegistered] = useState(false);
   const [cooldown, setCooldown] = useState(0);
   const [showStealthHelp, setShowStealthHelp] = useState(false);
@@ -443,13 +446,48 @@ function ReceiveScreen({ vault, onBack }: { vault: Vault; onBack: () => void }) 
     try {
       const hashes = await sweepStealthPayment(vault, p);
       haptic("success");
-      setSweepResult(r => ({ ...r, [p.stealthAddress]: { ok: true, hashes } }));
+      setClaimResult({ ok: true, hashes });
     } catch (e) {
       haptic("error");
-      setSweepResult(r => ({ ...r, [p.stealthAddress]: { ok: false, err: errMsg(e) } }));
+      setClaimResult({ ok: false, err: errMsg(e) });
     } finally {
       setSweeping(null);
     }
+  }
+
+  if (claimResult) {
+    return (
+      <div className="screen send-screen tx-result">
+        <img
+          src={claimResult.ok ? "/icons8-success-96.png" : "/icons8-fail-96.png"}
+          className="tx-result__icon"
+          alt=""
+        />
+        <h2 className="tx-result__title">{claimResult.ok ? "Claimed!" : "Claim Failed"}</h2>
+
+        {claimResult.ok ? (
+          <>
+            <p className="tx-result__sub">Your funds have been moved to your main wallet.</p>
+            <div className="claim-result__links">
+              {claimResult.hashes.map((h, i) => (
+                <a key={h} className="btn btn--ghost claim-result__link" href={`https://basescan.org/tx/${h}`} target="_blank" rel="noopener">
+                  {claimResult.hashes.length > 1 ? `Transaction ${i + 1}` : "View on Basescan"} ↗
+                </a>
+              ))}
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="tx-result__err">{claimResult.err}</p>
+            <button className="btn btn--primary" onClick={() => setClaimResult(null)}>Try Again</button>
+          </>
+        )}
+
+        <button className="btn btn--ghost" onClick={() => setClaimResult(null)}>
+          {claimResult.ok ? "Done" : "Back"}
+        </button>
+      </div>
+    );
   }
 
   return (
@@ -552,41 +590,26 @@ function ReceiveScreen({ vault, onBack }: { vault: Vault; onBack: () => void }) 
 
             {payments && payments.length > 0 && (
               <div className="stealth-payment-list">
-                {payments.map(p => {
-                  const result = sweepResult[p.stealthAddress];
-                  return (
-                    <div key={p.stealthAddress} className="stealth-payment">
-                      <div className="stealth-payment__assets">
-                        {p.ethRaw > 0n && <span className="stealth-payment__eth">{p.ethBalance} ETH</span>}
-                        {p.tokens.map(t => (
-                          <span key={t.address} className="stealth-payment__eth">
-                            {parseFloat(t.balance).toFixed(t.decimals <= 6 ? 2 : 5).replace(/\.?0+$/, "")} {t.symbol}
-                          </span>
-                        ))}
-                        <span className="stealth-payment__addr">{shortAddress(p.stealthAddress)}</span>
-                      </div>
-                      {!result && (
-                        <button
-                          className="btn btn--primary stealth-payment__claim"
-                          onClick={() => sweep(p)}
-                          disabled={sweeping === p.stealthAddress}
-                        >
-                          {sweeping === p.stealthAddress ? "Claiming…" : "Claim"}
-                        </button>
-                      )}
-                      {result?.ok && result.hashes && (
-                        <div className="stealth-payment__txs">
-                          {result.hashes.map((h, i) => (
-                            <a key={h} className="stealth-payment__tx" href={`https://basescan.org/tx/${h}`} target="_blank" rel="noopener">
-                              Tx {i + 1} claimed. View on Basescan ↗
-                            </a>
-                          ))}
-                        </div>
-                      )}
-                      {result && !result.ok && <p className="err" style={{marginTop:"0.4rem"}}>{result.err}</p>}
+                {payments.map(p => (
+                  <div key={p.stealthAddress} className="stealth-payment">
+                    <div className="stealth-payment__assets">
+                      {p.ethRaw > 0n && <span className="stealth-payment__eth">{p.ethBalance} ETH</span>}
+                      {p.tokens.map(t => (
+                        <span key={t.address} className="stealth-payment__eth">
+                          {parseFloat(t.balance).toFixed(t.decimals <= 6 ? 2 : 5).replace(/\.?0+$/, "")} {t.symbol}
+                        </span>
+                      ))}
+                      <span className="stealth-payment__addr">{shortAddress(p.stealthAddress)}</span>
                     </div>
-                  );
-                })}
+                    <button
+                      className="btn btn--primary stealth-payment__claim"
+                      onClick={() => sweep(p)}
+                      disabled={sweeping === p.stealthAddress}
+                    >
+                      {sweeping === p.stealthAddress ? "Claiming…" : "Claim"}
+                    </button>
+                  </div>
+                ))}
               </div>
             )}
           </div>

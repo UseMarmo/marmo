@@ -934,6 +934,14 @@ button, input, select, textarea { font-family: inherit; }
   padding: 0 1rem;
   line-height: 1.5;
 }
+.tx-result__sub {
+  font-size: 0.85rem;
+  color: var(--ink-muted);
+  text-align: center;
+  margin: 0;
+}
+.claim-result__links { display: flex; flex-direction: column; gap: 0.5rem; width: 100%; }
+.claim-result__link { text-decoration: none; display: block; text-align: center; }
 
 .swap-header {
   display: flex;
