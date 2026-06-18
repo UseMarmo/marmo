@@ -1,6 +1,6 @@
 [package]
 name = "marmo-desktop"
-version = "0.1.0"
+version = "0.3.0"
 description = "Marmo desktop wallet"
 authors = ["Marmo"]
 edition = "2021"
