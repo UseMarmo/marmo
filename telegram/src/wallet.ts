@@ -269,7 +269,8 @@ export async function sweepStealthPayment(
   }
 
   const remainingEth = await publicClient.getBalance({ address: stealthAddr });
-  const finalGasCost = gasPrice * GAS_ETH;
+  const freshGasPrice = await publicClient.getGasPrice();
+  const finalGasCost = freshGasPrice * GAS_ETH * 2n;
   if (remainingEth > finalGasCost) {
     const h = await walletClient.sendTransaction({
       to: toAddress,
