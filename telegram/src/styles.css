@@ -841,6 +841,19 @@ button, input, select, textarea { font-family: inherit; }
 .preview-row__key { color: var(--muted); }
 .preview-row__val { color: var(--ink); }
 .preview-row__val--mono { font-family: var(--mono); font-size: 0.82rem; }
+.preview-row__val--private {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--blue-2);
+  font-size: 0.82rem;
+}
+.send-private-hint {
+  font-size: 0.75rem;
+  color: var(--ink-muted);
+  margin-top: 0.4rem;
+  line-height: 1.45;
+}
 
 .quorum {
   font-size: 0.82rem;

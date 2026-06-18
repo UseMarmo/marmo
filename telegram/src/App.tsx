@@ -722,6 +722,7 @@ type TxResult = { ok: true; hash: string } | { ok: false; message: string };
 type SendStep = "input" | "preview" | "result";
 
 function SendScreen({ vault, balance, onBack }: { vault: Vault; balance: BalanceResult | null; onBack: () => void }) {
+  const [tab, setTab] = useState<"standard" | "private">("standard");
   const [step, setStep] = useState<SendStep>("input");
   const [tokens, setTokens] = useState<WalletToken[]>([{ address: "", symbol: "ETH", decimals: 18, balance: "0", logo: "/eth.png" }]);
   const [token, setToken] = useState("");
@@ -783,7 +784,11 @@ function SendScreen({ vault, balance, onBack }: { vault: Vault; balance: Balance
 
   function goPreview() {
     if (!parsed) { setErr("Enter an amount"); return; }
-    if (!to.startsWith("0x") || to.length < 10) { setErr("Enter a valid recipient address"); return; }
+    if (tab === "standard") {
+      if (!to.startsWith("0x") || to.length !== 42) { setErr("Enter a valid 0x address"); return; }
+    } else {
+      if (!to.startsWith("0x") || to.length !== 134) { setErr("Enter a valid stealth meta-address (134 chars)"); return; }
+    }
     setErr("");
     setStep("preview");
   }
@@ -793,14 +798,12 @@ function SendScreen({ vault, balance, onBack }: { vault: Vault; balance: Balance
     setErr("");
     setTxResult(null);
     try {
-      const isStealthy = to.length > 42;
       let hash: string;
-      const cosignKey = privateKeyToAddress(vault.shardAPrivKey);
-      if (isStealthy) {
-        const cd = await core.buildStealthSend(cosignKey, vault.apiKey, to, sendAmountWei, token || undefined);
+      if (tab === "private") {
+        const cd = await core.buildStealthSend(vault.address, vault.apiKey, to, sendAmountWei, token || undefined);
         hash = await buildAndSubmit(vault, cd.callData, BigInt(cd.value));
       } else {
-        const cd = await core.buildSend(cosignKey, vault.apiKey, to, sendAmountWei, token || undefined);
+        const cd = await core.buildSend(vault.address, vault.apiKey, to, sendAmountWei, token || undefined);
         hash = await buildAndSubmit(vault, cd.callData, BigInt(cd.value));
       }
       haptic("success");
@@ -817,6 +820,7 @@ function SendScreen({ vault, balance, onBack }: { vault: Vault; balance: Balance
 
   if (step === "result" && txResult) {
     const short = txResult.ok ? `${txResult.hash.slice(0, 10)}…${txResult.hash.slice(-8)}` : "";
+    const sentTitle = txResult.ok ? (tab === "private" ? "Sent privately!" : "Sent!") : "Transaction Failed";
     return (
       <div className="screen send-screen tx-result">
         <img
@@ -824,7 +828,7 @@ function SendScreen({ vault, balance, onBack }: { vault: Vault; balance: Balance
           className="tx-result__icon"
           alt=""
         />
-        <h2 className="tx-result__title">{txResult.ok ? "Sent!" : "Transaction Failed"}</h2>
+        <h2 className="tx-result__title">{sentTitle}</h2>
 
         {txResult.ok ? (
           <>
@@ -871,8 +875,20 @@ function SendScreen({ vault, balance, onBack }: { vault: Vault; balance: Balance
 
           <div className="preview-row">
             <span className="preview-row__key">To</span>
-            <span className="preview-row__val preview-row__val--mono">{shortAddress(to)}</span>
+            {tab === "private"
+              ? <span className="preview-row__val preview-row__val--private">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                  Private recipient
+                </span>
+              : <span className="preview-row__val preview-row__val--mono">{shortAddress(to)}</span>
+            }
           </div>
+          {tab === "private" && (
+            <div className="preview-row">
+              <span className="preview-row__key">Privacy</span>
+              <span className="preview-row__val">One-time stealth address</span>
+            </div>
+          )}
           <div className="preview-row">
             <span className="preview-row__key">Network</span>
             <span className="preview-row__val">Base</span>
@@ -906,6 +922,14 @@ function SendScreen({ vault, balance, onBack }: { vault: Vault; balance: Balance
         />
       )}
       <button className="back" onClick={onBack}>← Back</button>
+
+      <div className="receive-tabs">
+        <button className={`receive-tab${tab === "standard" ? " active" : ""}`} onClick={() => { setTab("standard"); setTo(""); setErr(""); }}>Standard</button>
+        <button className={`receive-tab${tab === "private" ? " active" : ""}`} onClick={() => { setTab("private"); setTo(""); setErr(""); }}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{marginRight:"0.3rem"}}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          Private
+        </button>
+      </div>
 
       <div className="field">
         <label>
@@ -955,18 +979,50 @@ function SendScreen({ vault, balance, onBack }: { vault: Vault; balance: Balance
         )}
       </div>
 
-      <div className="field">
-        <label>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-          Recipient
-        </label>
-        <input
-          value={to}
-          onChange={(e) => setTo(e.target.value)}
-          placeholder="0x… or stealth meta-address"
-          style={{ fontSize: "16px" }}
-        />
-      </div>
+      {tab === "standard" ? (
+        <div className="field">
+          <label>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            Recipient
+          </label>
+          <div className="ca-input">
+            <input
+              value={to}
+              onChange={(e) => setTo(e.target.value.trim())}
+              placeholder="0x…"
+              style={{ fontSize: "16px" }}
+            />
+            <button className="ca-input__paste" onClick={async () => {
+              try {
+                const text = await navigator.clipboard.readText();
+                setTo(text.trim());
+              } catch { setErr("Nothing in clipboard. Long-press the field and tap Paste."); }
+            }}>Paste</button>
+          </div>
+        </div>
+      ) : (
+        <div className="field">
+          <label>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            Recipient stealth meta-address
+          </label>
+          <div className="ca-input">
+            <input
+              value={to}
+              onChange={(e) => setTo(e.target.value.trim())}
+              placeholder="0x…(134 chars)"
+              style={{ fontSize: "13px", fontFamily: "monospace" }}
+            />
+            <button className="ca-input__paste" onClick={async () => {
+              try {
+                const text = await navigator.clipboard.readText();
+                setTo(text.trim());
+              } catch { setErr("Nothing in clipboard. Long-press the field and tap Paste."); }
+            }}>Paste</button>
+          </div>
+          <p className="send-private-hint">The recipient shares this from their Receive &gt; Private tab.</p>
+        </div>
+      )}
 
       <div className="quorum">
         Signing with <strong>Device</strong> + <strong>Co-signer</strong>
