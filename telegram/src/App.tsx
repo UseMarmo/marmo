@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, type ReactNode } from "react";
 import { privateKeyToAddress } from "viem/accounts";
 import { formatEther, formatUnits } from "viem";
 import {
@@ -194,6 +194,7 @@ function SetupTotpScreen({ vault, onDone, onBack }: { vault: Vault; onDone: (v: 
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>("loading");
+  const [anim, setAnim] = useState<"in" | "out">("in");
   const [vault, setVault] = useState<Vault | null>(null);
   const [balance, setBalance] = useState<BalanceResult | null>(null);
   const [error, setError] = useState("");
@@ -201,7 +202,12 @@ export default function App() {
 
   const navigate = useCallback((s: Screen) => {
     setError("");
-    setScreen(s);
+    setScreen(prev => {
+      if (prev === "loading") return s;
+      setAnim("out");
+      setTimeout(() => { setScreen(s); setAnim("in"); }, 150);
+      return prev;
+    });
     if (s === "dashboard" || s === "loading") {
       tg?.BackButton?.hide();
     } else {
@@ -245,30 +251,26 @@ export default function App() {
     }
   }, [screen, vault]);
 
-  if (screen === "loading") {
-    return <div className="loader"><div className="spinner" /></div>;
-  }
+  let content: ReactNode = null;
 
-  if (screen === "welcome") {
-    return (
+  if (screen === "loading") {
+    content = <div className="loader"><div className="spinner" /></div>;
+  } else if (screen === "welcome") {
+    content = (
       <WelcomeScreen
         onCreated={(v) => { setVault(v); navigate("dashboard"); }}
         onRecover={() => navigate("recover")}
       />
     );
-  }
-
-  if (screen === "recover") {
-    return (
+  } else if (screen === "recover") {
+    content = (
       <RecoverScreen
         onRecovered={(v) => { setVault(v); navigate("dashboard"); }}
         onBack={() => navigate("welcome")}
       />
     );
-  }
-
-  if (screen === "dashboard" && vault) {
-    return (
+  } else if (screen === "dashboard" && vault) {
+    content = (
       <DashboardScreen
         vault={vault}
         balance={balance}
@@ -284,22 +286,14 @@ export default function App() {
         }}
       />
     );
-  }
-
-  if (screen === "send" && vault) {
-    return <SendScreen vault={vault} balance={balance} onBack={() => navigate("dashboard")} />;
-  }
-
-  if (screen === "receive" && vault) {
-    return <ReceiveScreen vault={vault} onBack={() => navigate("dashboard")} />;
-  }
-
-  if (screen === "swap" && vault) {
-    return <SwapScreen vault={vault} onBack={() => navigate("dashboard")} />;
-  }
-
-  if (screen === "setup-totp" && vault) {
-    return (
+  } else if (screen === "send" && vault) {
+    content = <SendScreen vault={vault} balance={balance} onBack={() => navigate("dashboard")} />;
+  } else if (screen === "receive" && vault) {
+    content = <ReceiveScreen vault={vault} onBack={() => navigate("dashboard")} />;
+  } else if (screen === "swap" && vault) {
+    content = <SwapScreen vault={vault} onBack={() => navigate("dashboard")} />;
+  } else if (screen === "setup-totp" && vault) {
+    content = (
       <SetupTotpScreen
         vault={vault}
         onDone={(updatedVault) => { setVault(updatedVault); navigate("dashboard"); }}
@@ -308,7 +302,11 @@ export default function App() {
     );
   }
 
-  return null;
+  return (
+    <div key={screen} className={`screen-anim screen-anim--${anim}`}>
+      {content}
+    </div>
+  );
 }
 
 function WelcomeScreen({ onCreated, onRecover }: { onCreated: (v: Vault) => void; onRecover: () => void }) {
