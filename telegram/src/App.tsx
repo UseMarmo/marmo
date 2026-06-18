@@ -374,8 +374,8 @@ function RecoverScreen({ onRecovered, onBack }: { onRecovered: (v: Vault) => voi
 
   if (result?.ok) {
     return (
-      <div className="screen send-screen">
-        <div className="tx-result">
+      <div className="screen send-screen" style={{ justifyContent: "center" }}>
+        <div className="tx-result" style={{ paddingTop: 0 }}>
           <img src="/icons8-success-96.png" className="tx-result__icon" alt="" />
           <p className="tx-result__title">Wallet recovered</p>
           <p className="tx-result__sub">Your wallet is restored on this device and ready to use.</p>
@@ -389,8 +389,8 @@ function RecoverScreen({ onRecovered, onBack }: { onRecovered: (v: Vault) => voi
 
   if (result && !result.ok) {
     return (
-      <div className="screen send-screen">
-        <div className="tx-result">
+      <div className="screen send-screen" style={{ justifyContent: "center" }}>
+        <div className="tx-result" style={{ paddingTop: 0 }}>
           <img src="/icons8-fail-96.png" className="tx-result__icon" alt="" />
           <p className="tx-result__title">Recovery failed</p>
           <p className="tx-result__err">{result.err}</p>
