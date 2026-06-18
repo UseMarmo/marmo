@@ -150,7 +150,20 @@ button, input, select, textarea { font-family: inherit; }
 
 .btn--ghost:hover { border-color: var(--blue); background: rgba(56, 182, 255, 0.12); }
 
-.dashboard { gap: 1rem; }
+.screen--dashboard {
+  overflow-y: hidden;
+  padding: 0;
+}
+.dashboard {
+  flex: 1;
+  min-height: 0;
+  gap: 1rem;
+  overflow-y: auto;
+  scrollbar-width: none;
+  padding: 1.4rem 1.2rem;
+  padding-bottom: max(1.4rem, env(safe-area-inset-bottom));
+}
+.dashboard::-webkit-scrollbar { display: none; }
 
 .card {
   position: relative;

@@ -666,7 +666,7 @@ function DashboardScreen({
   }
 
   return (
-    <div className="screen dashboard">
+    <div className="screen screen--dashboard dashboard">
       {showHelp && <SecurityModal onClose={() => setShowHelp(false)} />}
       {showBgPicker && <BgPickerDrawer current={cardBg} onSelect={selectBg} onClose={() => setShowBgPicker(false)} />}
       <div className="card" style={{ backgroundImage: `url('/balance_card_media/${cardBg}')` }} onClick={onRefresh} role="button" aria-label="Refresh balance">
