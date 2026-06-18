@@ -555,36 +555,25 @@ export interface TxRecord {
   contractAddress?: string;
 }
 
-const TX_PAGE_SIZE = 20;
+export const TX_PAGE_SIZE = 10;
 
-export async function fetchTxHistory(address: string, page: number): Promise<TxRecord[]> {
+async function basescanFetch(params: Record<string, string>): Promise<TxRecord[]> {
   try {
-    const params = new URLSearchParams({
-      module: "account", action: "txlist",
-      address, sort: "desc",
-      page: String(page), offset: String(TX_PAGE_SIZE),
-    });
-    const res = await fetch(`https://api.basescan.org/api?${params}`);
-    const data = await res.json() as { status: string; result: TxRecord[] };
-    return data.status === "1" ? data.result : [];
+    const p = new URLSearchParams({ module: "account", sort: "desc", ...params });
+    const res = await fetch(`https://api.basescan.org/api?${p}`);
+    const data = await res.json() as { status: string; result: TxRecord[] | string };
+    return data.status === "1" && Array.isArray(data.result) ? data.result : [];
   } catch {
     return [];
   }
 }
 
+export async function fetchTxHistory(address: string, page: number): Promise<TxRecord[]> {
+  return basescanFetch({ action: "txlistinternal", address, page: String(page), offset: String(TX_PAGE_SIZE) });
+}
+
 export async function fetchTokenTxHistory(address: string, page: number): Promise<TxRecord[]> {
-  try {
-    const params = new URLSearchParams({
-      module: "account", action: "tokentx",
-      address, sort: "desc",
-      page: String(page), offset: String(TX_PAGE_SIZE),
-    });
-    const res = await fetch(`https://api.basescan.org/api?${params}`);
-    const data = await res.json() as { status: string; result: TxRecord[] };
-    return data.status === "1" ? data.result : [];
-  } catch {
-    return [];
-  }
+  return basescanFetch({ action: "tokentx", address, page: String(page), offset: String(TX_PAGE_SIZE) });
 }
 
 export async function fetchEthPrice(): Promise<number> {

@@ -28,6 +28,7 @@ import {
   type TxRecord,
   fetchTxHistory,
   fetchTokenTxHistory,
+  TX_PAGE_SIZE,
 } from "./wallet.js";
 import * as core from "./core.js";
 
@@ -614,19 +615,19 @@ function DashboardScreen({
 
   async function loadTxPage(page: number) {
     setTxLoading(true);
-    const [normal, token] = await Promise.all([
+    const [internal, token] = await Promise.all([
       fetchTxHistory(vault.address, page),
       fetchTokenTxHistory(vault.address, page),
     ]);
-    const merged = [...normal, ...token]
+    const merged = [...internal, ...token]
       .sort((a, b) => Number(b.timeStamp) - Number(a.timeStamp))
-      .slice(0, 20);
+      .slice(0, TX_PAGE_SIZE);
     if (page === 1) {
       setTxList(merged);
     } else {
       setTxList(prev => [...prev, ...merged]);
     }
-    setTxHasMore(merged.length === 20);
+    setTxHasMore(internal.length === TX_PAGE_SIZE || token.length === TX_PAGE_SIZE);
     setTxPage(page);
     setTxLoading(false);
   }
@@ -721,8 +722,14 @@ function DashboardScreen({
 
       <div className="dash-tabs">
         <div className="receive-tabs" style={{ marginBottom: 0 }}>
-          <button className={`receive-tab${dashTab === "tokens" ? " active" : ""}`} onClick={() => setDashTab("tokens")}>Tokens</button>
-          <button className={`receive-tab${dashTab === "history" ? " active" : ""}`} onClick={() => setDashTab("history")}>History</button>
+          <button className={`receive-tab${dashTab === "tokens" ? " active" : ""}`} onClick={() => setDashTab("tokens")}>
+            <img src="/icons8-tokens-96.png" width={15} height={15} alt="" />
+            Tokens
+          </button>
+          <button className={`receive-tab${dashTab === "history" ? " active" : ""}`} onClick={() => setDashTab("history")}>
+            <img src="/icons8-history-96.png" width={15} height={15} alt="" />
+            History
+          </button>
         </div>
 
         {dashTab === "tokens" && (
@@ -763,10 +770,11 @@ function DashboardScreen({
               return (
                 <a key={tx.hash} className="dash-tx-item" href={`https://basescan.org/tx/${tx.hash}`} target="_blank" rel="noopener">
                   <div className="dash-tx-item__icon">
-                    {!known ? <span className="dash-tx-item__unknown">?</span>
+                    {!known
+                      ? <span className="dash-tx-item__unknown">?</span>
                       : out
-                        ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f87171" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
-                        : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
+                        ? <img src="/icons8-top-right-96.png" width={18} height={18} alt="out" />
+                        : <img src="/icons8-bottom-left-100.png" width={18} height={18} alt="in" />
                     }
                   </div>
                   <div className="dash-tx-item__body">
@@ -777,10 +785,22 @@ function DashboardScreen({
                 </a>
               );
             })}
-            {txList.length === 0 && !txLoading && <p className="dash-empty">No transactions yet</p>}
+            {txList.length === 0 && !txLoading && (
+              <p className="dash-empty">
+                No transactions yet.<br />
+                Not seeing a transaction?{" "}
+                <a className="dash-basescan-link" href={`https://basescan.org/address/${vault.address}`} target="_blank" rel="noopener">View full history on Basescan ↗</a>
+              </p>
+            )}
             {txLoading && <p className="dash-empty">Loading…</p>}
             {!txLoading && txHasMore && txList.length > 0 && (
               <button className="btn btn--ghost dash-load-more" onClick={() => loadTxPage(txPage + 1)}>Load more</button>
+            )}
+            {!txLoading && txList.length > 0 && (
+              <p className="dash-basescan-note">
+                Not seeing a transaction?{" "}
+                <a className="dash-basescan-link" href={`https://basescan.org/address/${vault.address}`} target="_blank" rel="noopener">View full history on Basescan ↗</a>
+              </p>
             )}
           </div>
         )}
