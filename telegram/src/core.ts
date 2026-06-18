@@ -226,6 +226,14 @@ export async function recoverWallet(address: string, code: string): Promise<stri
   return data.vaultKeys;
 }
 
+export async function uploadVaultBackup(address: string, apiKey: string, vaultKeys: string): Promise<void> {
+  await coreFetch(`/v1/wallets/${address}/vault-backup`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({ vaultKeys }),
+  });
+}
+
 export async function getTotpStatus(address: string, apiKey: string): Promise<boolean> {
   const res = await coreFetch(`/v1/wallets/${address}/totp/status`, {
     headers: { authorization: `Bearer ${apiKey}` },

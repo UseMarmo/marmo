@@ -19,6 +19,7 @@ import {
   initTotpSetup,
   confirmTotpSetup,
   recoverFromTotp,
+  ensureVaultBackup,
   type Vault,
   type BalanceResult,
   type WalletToken,
@@ -213,6 +214,7 @@ export default function App() {
         await verifyPasskey(v.credentialId);
         setVault(v);
         navigate("dashboard");
+        ensureVaultBackup(v).catch(() => {});
       } catch {
         navigate("welcome");
       }

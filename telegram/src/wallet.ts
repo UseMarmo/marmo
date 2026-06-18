@@ -297,6 +297,21 @@ async function resolveAddress(
   }) as Promise<`0x${string}`>;
 }
 
+export async function ensureVaultBackup(vault: Vault): Promise<void> {
+  if (!vault.totpEnabled) return;
+  const serverKey = privateKeyToAddress(vault.shardAPrivKey);
+  const vaultKeys = JSON.stringify({
+    shardAPrivKey: vault.shardAPrivKey,
+    shardCPrivKey: vault.shardCPrivKey,
+    spendPrivKey: vault.spendPrivKey,
+    viewPrivKey: vault.viewPrivKey,
+    apiKey: vault.apiKey,
+    address: vault.address,
+    shardBAddress: vault.shardBAddress,
+  });
+  await core.uploadVaultBackup(serverKey, vault.apiKey, vaultKeys);
+}
+
 export async function initTotpSetup(vault: Vault): Promise<{ secret: string; uri: string }> {
   const serverKey = privateKeyToAddress(vault.shardAPrivKey);
   return core.setupTotp(serverKey, vault.apiKey);

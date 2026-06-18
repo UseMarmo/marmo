@@ -490,6 +490,26 @@ app.get("/v1/wallets/:address/totp/status", async (c) => {
   return c.json({ enabled: wallet.totpEnabled });
 });
 
+app.post("/v1/wallets/:address/vault-backup", async (c) => {
+  const address = c.req.param("address").toLowerCase();
+  const wallet = await getWallet(address);
+  if (!wallet) return c.json({ error: "wallet not found" }, 404);
+
+  const auth = c.req.header("authorization") ?? "";
+  const provided = auth.replace(/^Bearer\s+/i, "");
+  if (!provided || hashKey(provided) !== wallet.apiKeyHash) {
+    return c.json({ error: "unauthorized" }, 401);
+  }
+
+  const body = await c.req.json().catch(() => null);
+  if (!body?.vaultKeys || typeof body.vaultKeys !== "string") {
+    return c.json({ error: "vaultKeys required" }, 400);
+  }
+
+  await putVaultKeys(address, encryptSecret(body.vaultKeys, VAULT_KEY));
+  return c.json({ ok: true });
+});
+
 app.post("/v1/recover", async (c) => {
   const body = await c.req.json().catch(() => null);
   if (!body?.address || !body?.code) {
