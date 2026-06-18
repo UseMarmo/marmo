@@ -264,12 +264,10 @@ button, input, select, textarea { font-family: inherit; }
   display: flex;
   flex-direction: column;
   gap: 0;
-  flex: 1;
-  min-height: 0;
 }
 
 .dash-panel-viewport {
-  overflow: hidden;
+  overflow-x: clip;
 }
 .dash-panel {
   will-change: transform, opacity;
