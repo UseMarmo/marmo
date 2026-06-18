@@ -150,18 +150,9 @@ button, input, select, textarea { font-family: inherit; }
 
 .btn--ghost:hover { border-color: var(--blue); background: rgba(56, 182, 255, 0.12); }
 
-.screen--dashboard {
-  overflow-y: hidden;
-  padding: 0;
-}
 .dashboard {
-  flex: 1;
-  min-height: 0;
   gap: 1rem;
-  overflow-y: auto;
   scrollbar-width: none;
-  padding: 1.4rem 1.2rem;
-  padding-bottom: max(1.4rem, env(safe-area-inset-bottom));
 }
 .dashboard::-webkit-scrollbar { display: none; }
 
@@ -416,6 +407,19 @@ button, input, select, textarea { font-family: inherit; }
 .token-drawer__val { font-size: 0.83rem; color: var(--ink); font-weight: 500; }
 .token-drawer__val--addr { display: flex; align-items: center; gap: 0.4rem; font-family: var(--mono); }
 .token-drawer__copy { color: var(--ink-muted); display: flex; align-items: center; }
+
+.offline-drawer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.75rem;
+  padding: 1.6rem 1.4rem 1.2rem;
+}
+.offline-drawer__icon { opacity: 0.85; }
+.offline-drawer__title { font-size: 1rem; font-weight: 600; color: var(--ink); margin: 0; }
+.offline-drawer__body { font-size: 0.83rem; color: var(--ink-muted); line-height: 1.55; margin: 0; }
+.offline-drawer__actions { display: flex; flex-direction: column; gap: 0.5rem; width: 100%; margin-top: 0.25rem; }
 
 @keyframes totp-icon-a {
   0%, 38% { opacity: 1; filter: blur(0px); }

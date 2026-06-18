@@ -10,6 +10,7 @@ import {
   getStealthMetaAddress,
   buildAndSubmit,
   fetchEthPrice,
+  type PriceResult,
   fetchWalletTokens,
   fetchTokenByAddress,
   saveCustomTokenAddress,
@@ -591,6 +592,7 @@ function DashboardScreen({
   const [dashTab, setDashTab] = useState<"tokens" | "history">("tokens");
   const [tokens, setTokens] = useState<WalletToken[]>([]);
   const [ethPrice, setEthPrice] = useState(0);
+  const [priceOffline, setPriceOffline] = useState(false);
   const [selectedToken, setSelectedToken] = useState<WalletToken | null>(null);
   const [txBuffer, setTxBuffer] = useState<TxRecord[]>([]);
   const [txShown, setTxShown] = useState(0);
@@ -608,9 +610,22 @@ function DashboardScreen({
   useEffect(() => {
     let stale = false;
     fetchWalletTokens(vault.address).then(t => { if (!stale) setTokens(t); });
-    fetchEthPrice().then(p => { if (!stale) setEthPrice(p); });
+    loadPrice(false);
     return () => { stale = true; };
   }, [vault.address]);
+
+  async function loadPrice(forceRefresh: boolean) {
+    if (forceRefresh) {
+      try { localStorage.removeItem("marmo_eth_price_cache"); } catch {}
+    }
+    const result = await fetchEthPrice();
+    setEthPrice(result.price);
+    if (result.failed && result.price === 0) {
+      setPriceOffline(true);
+    } else {
+      setPriceOffline(false);
+    }
+  }
 
   useEffect(() => {
     if (dashTab !== "history" || txLoaded) return;
@@ -666,10 +681,11 @@ function DashboardScreen({
   }
 
   return (
-    <div className="screen screen--dashboard dashboard">
+    <div className="screen dashboard">
       {showHelp && <SecurityModal onClose={() => setShowHelp(false)} />}
       {showBgPicker && <BgPickerDrawer current={cardBg} onSelect={selectBg} onClose={() => setShowBgPicker(false)} />}
-      <div className="card" style={{ backgroundImage: `url('/balance_card_media/${cardBg}')` }} onClick={onRefresh} role="button" aria-label="Refresh balance">
+      {priceOffline && <OfflineDrawer onDismiss={() => setPriceOffline(false)} onRetry={() => loadPrice(true)} />}
+      <div className="card" style={{ backgroundImage: `url('/balance_card_media/${cardBg}')` }} onClick={() => { onRefresh(); loadPrice(true); }} role="button" aria-label="Refresh balance">
         <div className="card__top">
           <span className="card__label">Marmo Wallet</span>
           <div className="card__actions">
@@ -900,6 +916,24 @@ function TokenDrawer({ token, ethPrice, onClose }: { token: WalletToken; ethPric
               <span className="token-drawer__val">Native token</span>
             </div>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OfflineDrawer({ onDismiss, onRetry }: { onDismiss: () => void; onRetry: () => void }) {
+  return (
+    <div className="modal-overlay" onClick={onDismiss}>
+      <div className="modal-panel offline-drawer" onClick={e => e.stopPropagation()}>
+        <img src="/icons8-without-internet-96.png" width={52} height={52} className="offline-drawer__icon" alt="" />
+        <h3 className="offline-drawer__title">No internet connection</h3>
+        <p className="offline-drawer__body">
+          We couldn't get real-time prices for your tokens. Your funds are safe — this only affects displayed USD values. Check your connection and try again.
+        </p>
+        <div className="offline-drawer__actions">
+          <button className="btn btn--primary" onClick={() => { onRetry(); onDismiss(); }}>Try again</button>
+          <button className="btn btn--ghost" onClick={onDismiss}>Dismiss</button>
         </div>
       </div>
     </div>
@@ -1346,7 +1380,7 @@ function SendScreen({ vault, balance, onBack }: { vault: Vault; balance: Balance
   const amountRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    fetchEthPrice().then(setEthPrice);
+    fetchEthPrice().then(r => setEthPrice(r.price));
     fetchWalletTokens(vault.address).then(setTokens);
   }, [vault.address]);
 

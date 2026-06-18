@@ -499,21 +499,23 @@ export async function fetchWalletTokens(address: string): Promise<WalletToken[]>
   return tokens;
 }
 
-let priceCache: { value: number; ts: number } | null = null;
-const PRICE_TTL = 2 * 60 * 1000;
+const PRICE_TTL = 5 * 60 * 1000;
+const PRICE_LS_KEY = "marmo_eth_price_cache";
 
-export interface TxRecord {
-  hash: string;
-  from: string;
-  to: string;
-  value: string;
-  isError: string;
-  timeStamp: string;
-  input: string;
-  tokenSymbol?: string;
-  tokenDecimal?: string;
-  tokenName?: string;
-  contractAddress?: string;
+interface PriceCache { value: number; ts: number }
+
+function loadPersistentPrice(): PriceCache | null {
+  try {
+    const raw = localStorage.getItem(PRICE_LS_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as PriceCache;
+  } catch { return null; }
+}
+
+function savePersistentPrice(value: number) {
+  try {
+    localStorage.setItem(PRICE_LS_KEY, JSON.stringify({ value, ts: Date.now() }));
+  } catch {}
 }
 
 export const TX_PAGE_SIZE = 10;
@@ -609,16 +611,30 @@ export async function fetchTxBatch(address: string, state: TxFetchState | null):
   };
 }
 
-export async function fetchEthPrice(): Promise<number> {
-  if (priceCache && Date.now() - priceCache.ts < PRICE_TTL) return priceCache.value;
+export interface PriceResult {
+  price: number;
+  cached: boolean;
+  failed: boolean;
+}
+
+export async function fetchEthPrice(): Promise<PriceResult> {
+  const persistent = loadPersistentPrice();
+  if (persistent && Date.now() - persistent.ts < PRICE_TTL) {
+    return { price: persistent.value, cached: true, failed: false };
+  }
   try {
     const res = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd");
     const data = await res.json() as { ethereum?: { usd?: number } };
     const value = data.ethereum?.usd ?? 0;
-    if (value > 0) priceCache = { value, ts: Date.now() };
-    return value;
+    if (value > 0) {
+      savePersistentPrice(value);
+      return { price: value, cached: false, failed: false };
+    }
+    if (persistent) return { price: persistent.value, cached: true, failed: true };
+    return { price: 0, cached: false, failed: true };
   } catch {
-    return priceCache?.value ?? 0;
+    if (persistent) return { price: persistent.value, cached: true, failed: true };
+    return { price: 0, cached: false, failed: true };
   }
 }
 
@@ -636,7 +652,7 @@ const ETH_LIKE_ADDRS = new Set([
 export async function getBalance(address: string): Promise<BalanceResult> {
   const addr = address as `0x${string}`;
 
-  const [ethRaw, ethPrice, ...tokenRaws] = await Promise.all([
+  const [ethRaw, priceResult, ...tokenRaws] = await Promise.all([
     publicClient.getBalance({ address: addr }),
     fetchEthPrice(),
     ...BASE_TOKENS.map(t =>
@@ -644,6 +660,7 @@ export async function getBalance(address: string): Promise<BalanceResult> {
         .catch(() => 0n)
     ),
   ]);
+  const ethPrice = (priceResult as PriceResult).price;
 
   const usdcIdx = BASE_TOKENS.findIndex(t => t.address.toLowerCase() === USDC.toLowerCase());
   const usdcRaw = usdcIdx >= 0 ? tokenRaws[usdcIdx] : 0n;
