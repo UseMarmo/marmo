@@ -502,18 +502,21 @@ function DashboardScreen({
 
       {!vault.totpEnabled && !bannerDismissed && (
         <div className="totp-banner">
-          <div className="totp-banner__icon">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <div className="totp-banner__top-row">
+            <div className="totp-banner__icon-morph">
+              <img src="/icons8-google-authenticator-96.png" className="totp-morph-a" width={28} height={28} alt="" />
+              <img src="/icons8-microsoft-authenticator-96.png" className="totp-morph-b" width={28} height={28} alt="" />
+            </div>
+            <button className="totp-banner__dismiss" onClick={() => setBannerDismissed(true)} aria-label="Dismiss">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
           </div>
           <div className="totp-banner__body">
             <span className="totp-banner__title">Secure your recovery</span>
             <span className="totp-banner__sub">Set up an authenticator app so you can recover your wallet if you lose this device. Takes 30 seconds.</span>
           </div>
-          <div className="totp-banner__actions">
+          <div className="totp-banner__footer">
             <button className="btn btn--primary totp-banner__cta" onClick={onSetupTotp}>Set up</button>
-            <button className="totp-banner__dismiss" onClick={() => setBannerDismissed(true)} aria-label="Dismiss">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-            </button>
           </div>
         </div>
       )}
