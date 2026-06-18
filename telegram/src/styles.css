@@ -255,6 +255,124 @@ button, input, select, textarea { font-family: inherit; }
 
 .addr__icon { display: flex; align-items: center; color: var(--blue-2); }
 
+.dash-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  flex: 1;
+  min-height: 0;
+}
+
+.dash-token-list,
+.dash-tx-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding-top: 0.6rem;
+}
+
+.dash-token-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-brd);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem 0.9rem;
+  cursor: pointer;
+  width: 100%;
+  transition: background 0.15s;
+}
+.dash-token-item:hover { background: var(--glass-bg-2); }
+.dash-token-item__left  { display: flex; align-items: center; gap: 0.65rem; }
+.dash-token-item__logo  { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+.dash-token-item__logo--placeholder {
+  width: 36px; height: 36px; border-radius: 50%;
+  background: var(--bg-2); border: 1px solid var(--line);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.85rem; font-weight: 600; color: var(--ink-muted);
+  flex-shrink: 0;
+}
+.dash-token-item__info  { display: flex; flex-direction: column; gap: 0.15rem; text-align: left; }
+.dash-token-item__name  { font-size: 0.85rem; font-weight: 600; color: var(--ink); }
+.dash-token-item__price { font-size: 0.75rem; color: var(--ink-muted); }
+.dash-token-item__right { display: flex; flex-direction: column; align-items: flex-end; gap: 0.15rem; }
+.dash-token-item__balance { font-size: 0.85rem; font-weight: 600; color: var(--ink); }
+.dash-token-item__usd   { font-size: 0.75rem; color: var(--ink-muted); }
+
+.dash-tx-item {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-brd);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem 0.9rem;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.dash-tx-item:hover { background: var(--glass-bg-2); }
+.dash-tx-item__icon {
+  width: 32px; height: 32px; border-radius: 50%;
+  background: var(--bg-2); border: 1px solid var(--line);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.dash-tx-item__unknown { font-size: 0.85rem; color: var(--ink-muted); font-weight: 600; }
+.dash-tx-item__body { display: flex; flex-direction: column; gap: 0.15rem; flex: 1; min-width: 0; }
+.dash-tx-item__hash { font-family: var(--mono); font-size: 0.78rem; color: var(--ink-soft); }
+.dash-tx-item__amount { font-size: 0.8rem; font-weight: 600; color: var(--ink); }
+.dash-tx-item__ext { color: var(--ink-muted); flex-shrink: 0; }
+
+.dash-empty {
+  text-align: center;
+  color: var(--ink-muted);
+  font-size: 0.82rem;
+  padding: 1.5rem 0;
+  margin: 0;
+}
+.dash-load-more {
+  width: 100%;
+  margin-top: 0.25rem;
+}
+
+.token-drawer__price {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--ink);
+  text-align: center;
+  padding: 1.25rem 0 0.75rem;
+}
+.token-drawer__rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid var(--glass-brd);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.token-drawer__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.7rem 0.9rem;
+  border-bottom: 1px solid var(--line);
+}
+.token-drawer__row:last-child { border-bottom: none; }
+.token-drawer__row--btn {
+  width: 100%;
+  cursor: pointer;
+  background: none;
+  transition: background 0.12s;
+}
+.token-drawer__row--btn:hover { background: var(--glass-bg); }
+.token-drawer__label { font-size: 0.8rem; color: var(--ink-muted); }
+.token-drawer__val { font-size: 0.83rem; color: var(--ink); font-weight: 500; }
+.token-drawer__val--addr { display: flex; align-items: center; gap: 0.4rem; font-family: var(--mono); }
+.token-drawer__copy { color: var(--ink-muted); display: flex; align-items: center; }
+
 @keyframes totp-icon-a {
   0%, 38% { opacity: 1; filter: blur(0px); }
   48%      { opacity: 0; filter: blur(7px); }

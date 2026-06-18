@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { privateKeyToAddress } from "viem/accounts";
+import { formatEther } from "viem";
 import {
   createWallet,
   vaultExists,
@@ -24,6 +25,9 @@ import {
   type BalanceResult,
   type WalletToken,
   type StealthPayment,
+  type TxRecord,
+  fetchTxHistory,
+  fetchTokenTxHistory,
 } from "./wallet.js";
 import * as core from "./core.js";
 
@@ -583,12 +587,49 @@ function DashboardScreen({
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [showBgPicker, setShowBgPicker] = useState(false);
+  const [dashTab, setDashTab] = useState<"tokens" | "history">("tokens");
+  const [tokens, setTokens] = useState<WalletToken[]>([]);
+  const [ethPrice, setEthPrice] = useState(0);
+  const [selectedToken, setSelectedToken] = useState<WalletToken | null>(null);
+  const [txList, setTxList] = useState<TxRecord[]>([]);
+  const [txPage, setTxPage] = useState(1);
+  const [txLoading, setTxLoading] = useState(false);
+  const [txHasMore, setTxHasMore] = useState(true);
   const scrambledUsd = useScramble(balance?.usdValue ?? null);
   const scrambledEth = useScramble(balance?.eth ?? null);
   const scrambledEthUsd = useScramble(balance?.ethUsdValue ?? null);
   const [cardBg, setCardBg] = useState<string>(
     () => localStorage.getItem("marmo_card_bg") ?? DEFAULT_BG
   );
+
+  useEffect(() => {
+    fetchWalletTokens(vault.address).then(setTokens);
+    fetchEthPrice().then(setEthPrice);
+  }, [vault.address]);
+
+  useEffect(() => {
+    if (dashTab !== "history" || txList.length > 0) return;
+    loadTxPage(1);
+  }, [dashTab]);
+
+  async function loadTxPage(page: number) {
+    setTxLoading(true);
+    const [normal, token] = await Promise.all([
+      fetchTxHistory(vault.address, page),
+      fetchTokenTxHistory(vault.address, page),
+    ]);
+    const merged = [...normal, ...token]
+      .sort((a, b) => Number(b.timeStamp) - Number(a.timeStamp))
+      .slice(0, 20);
+    if (page === 1) {
+      setTxList(merged);
+    } else {
+      setTxList(prev => [...prev, ...merged]);
+    }
+    setTxHasMore(merged.length === 20);
+    setTxPage(page);
+    setTxLoading(false);
+  }
 
   function selectBg(bg: string) {
     setCardBg(bg);
@@ -677,6 +718,146 @@ function DashboardScreen({
           </div>
         </div>
       )}
+
+      <div className="dash-tabs">
+        <div className="receive-tabs" style={{ marginBottom: 0 }}>
+          <button className={`receive-tab${dashTab === "tokens" ? " active" : ""}`} onClick={() => setDashTab("tokens")}>Tokens</button>
+          <button className={`receive-tab${dashTab === "history" ? " active" : ""}`} onClick={() => setDashTab("history")}>History</button>
+        </div>
+
+        {dashTab === "tokens" && (
+          <div className="dash-token-list">
+            {tokens.filter(t => parseFloat(t.balance) > 0).map(token => {
+              const price = getTokenPrice(token.symbol, ethPrice);
+              const usdVal = price > 0 ? (parseFloat(token.balance) * price) : null;
+              return (
+                <button key={token.address || "eth"} className="dash-token-item" onClick={() => setSelectedToken(token)}>
+                  <div className="dash-token-item__left">
+                    {token.logo ? <img src={token.logo} width={36} height={36} className="dash-token-item__logo" alt="" /> : <div className="dash-token-item__logo dash-token-item__logo--placeholder">{token.symbol[0]}</div>}
+                    <div className="dash-token-item__info">
+                      <span className="dash-token-item__name">{TOKEN_NAMES[token.symbol] ?? token.symbol}</span>
+                      <span className="dash-token-item__price">{price > 0 ? `$${price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "-"}</span>
+                    </div>
+                  </div>
+                  <div className="dash-token-item__right">
+                    <span className="dash-token-item__balance">{token.balance}</span>
+                    <span className="dash-token-item__usd">{usdVal != null ? `$${usdVal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : ""}</span>
+                  </div>
+                </button>
+              );
+            })}
+            {tokens.every(t => parseFloat(t.balance) === 0) && (
+              <p className="dash-empty">No tokens yet</p>
+            )}
+          </div>
+        )}
+
+        {dashTab === "history" && (
+          <div className="dash-tx-list">
+            {txList.map(tx => {
+              const out = tx.from.toLowerCase() === vault.address.toLowerCase();
+              const known = tx.value !== "0" || tx.tokenSymbol;
+              const amount = tx.tokenSymbol
+                ? `${(Number(tx.value) / 10 ** Number(tx.tokenDecimal ?? 18)).toLocaleString("en-US", { maximumFractionDigits: 6 })} ${tx.tokenSymbol}`
+                : tx.value !== "0" ? `${parseFloat(formatEther(BigInt(tx.value))).toLocaleString("en-US", { maximumFractionDigits: 6 })} ETH` : null;
+              return (
+                <a key={tx.hash} className="dash-tx-item" href={`https://basescan.org/tx/${tx.hash}`} target="_blank" rel="noopener">
+                  <div className="dash-tx-item__icon">
+                    {!known ? <span className="dash-tx-item__unknown">?</span>
+                      : out
+                        ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f87171" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+                        : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
+                    }
+                  </div>
+                  <div className="dash-tx-item__body">
+                    <span className="dash-tx-item__hash">{tx.hash.slice(0, 10)}…{tx.hash.slice(-6)}</span>
+                    {amount && <span className="dash-tx-item__amount">{out ? "-" : "+"}{amount}</span>}
+                  </div>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="dash-tx-item__ext"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                </a>
+              );
+            })}
+            {txList.length === 0 && !txLoading && <p className="dash-empty">No transactions yet</p>}
+            {txLoading && <p className="dash-empty">Loading…</p>}
+            {!txLoading && txHasMore && txList.length > 0 && (
+              <button className="btn btn--ghost dash-load-more" onClick={() => loadTxPage(txPage + 1)}>Load more</button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {selectedToken && <TokenDrawer token={selectedToken} ethPrice={ethPrice} onClose={() => setSelectedToken(null)} />}
+    </div>
+  );
+}
+
+const TOKEN_NAMES: Record<string, string> = {
+  ETH:   "Ethereum",
+  USDC:  "USD Coin",
+  USDT:  "Tether USD",
+  WETH:  "Wrapped Ether",
+  DAI:   "Dai Stablecoin",
+  USDbC: "USD Base Coin",
+  cbETH: "Coinbase Wrapped ETH",
+};
+
+function getTokenPrice(symbol: string, ethPrice: number): number {
+  if (["USDC", "USDT", "DAI", "USDbC"].includes(symbol)) return 1;
+  if (["ETH", "WETH", "cbETH"].includes(symbol)) return ethPrice;
+  return 0;
+}
+
+function TokenDrawer({ token, ethPrice, onClose }: { token: WalletToken; ethPrice: number; onClose: () => void }) {
+  const [copied, setCopied] = useState(false);
+  const price = getTokenPrice(token.symbol, ethPrice);
+
+  async function copyCA() {
+    if (!token.address) return;
+    await navigator.clipboard.writeText(token.address);
+    haptic("success");
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1400);
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-panel token-drawer" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <span className="modal-title">{TOKEN_NAMES[token.symbol] ?? token.symbol}</span>
+          <button className="modal-close" onClick={onClose}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+
+        <div className="token-drawer__price">
+          {price > 0 ? `$${price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
+        </div>
+
+        <div className="token-drawer__rows">
+          <div className="token-drawer__row">
+            <span className="token-drawer__label">Symbol</span>
+            <span className="token-drawer__val">{token.symbol}</span>
+          </div>
+          <div className="token-drawer__row">
+            <span className="token-drawer__label">Name</span>
+            <span className="token-drawer__val">{TOKEN_NAMES[token.symbol] ?? token.symbol}</span>
+          </div>
+          {token.address ? (
+            <button className="token-drawer__row token-drawer__row--btn" onClick={copyCA}>
+              <span className="token-drawer__label">Contract</span>
+              <span className="token-drawer__val token-drawer__val--addr">
+                {token.address.slice(0, 8)}…{token.address.slice(-6)}
+                <span className="token-drawer__copy">{copied ? "✓" : <CopyIcon />}</span>
+              </span>
+            </button>
+          ) : (
+            <div className="token-drawer__row">
+              <span className="token-drawer__label">Contract</span>
+              <span className="token-drawer__val">Native token</span>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

@@ -541,6 +541,52 @@ export async function fetchWalletTokens(address: string): Promise<WalletToken[]>
 let priceCache: { value: number; ts: number } | null = null;
 const PRICE_TTL = 2 * 60 * 1000;
 
+export interface TxRecord {
+  hash: string;
+  from: string;
+  to: string;
+  value: string;
+  isError: string;
+  timeStamp: string;
+  input: string;
+  tokenSymbol?: string;
+  tokenDecimal?: string;
+  tokenName?: string;
+  contractAddress?: string;
+}
+
+const TX_PAGE_SIZE = 20;
+
+export async function fetchTxHistory(address: string, page: number): Promise<TxRecord[]> {
+  try {
+    const params = new URLSearchParams({
+      module: "account", action: "txlist",
+      address, sort: "desc",
+      page: String(page), offset: String(TX_PAGE_SIZE),
+    });
+    const res = await fetch(`https://api.basescan.org/api?${params}`);
+    const data = await res.json() as { status: string; result: TxRecord[] };
+    return data.status === "1" ? data.result : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function fetchTokenTxHistory(address: string, page: number): Promise<TxRecord[]> {
+  try {
+    const params = new URLSearchParams({
+      module: "account", action: "tokentx",
+      address, sort: "desc",
+      page: String(page), offset: String(TX_PAGE_SIZE),
+    });
+    const res = await fetch(`https://api.basescan.org/api?${params}`);
+    const data = await res.json() as { status: string; result: TxRecord[] };
+    return data.status === "1" ? data.result : [];
+  } catch {
+    return [];
+  }
+}
+
 export async function fetchEthPrice(): Promise<number> {
   if (priceCache && Date.now() - priceCache.ts < PRICE_TTL) return priceCache.value;
   try {
