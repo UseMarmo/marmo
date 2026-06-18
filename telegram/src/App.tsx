@@ -2126,6 +2126,10 @@ declare global {
       WebApp: {
         ready(): void;
         expand(): void;
+        disableVerticalSwipes?(): void;
+        viewportStableHeight?: number;
+        viewportHeight?: number;
+        onEvent?(event: string, cb: () => void): void;
         HapticFeedback?: {
           notificationOccurred(t: "success" | "warning" | "error"): void;
         };
