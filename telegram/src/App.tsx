@@ -397,6 +397,7 @@ function ReceiveScreen({ vault, onBack }: { vault: Vault; onBack: () => void }) 
   const [sweepResult, setSweepResult] = useState<Record<string, { ok: boolean; hashes?: string[]; err?: string }>>({});
   const [registered, setRegistered] = useState(false);
   const [cooldown, setCooldown] = useState(0);
+  const [showStealthHelp, setShowStealthHelp] = useState(false);
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -503,6 +504,30 @@ function ReceiveScreen({ vault, onBack }: { vault: Vault; onBack: () => void }) 
             </button>
           </div>
 
+          {showStealthHelp && (
+            <div className="modal-overlay" onClick={() => setShowStealthHelp(false)}>
+              <div className="modal-panel" onClick={e => e.stopPropagation()}>
+                <div className="modal-panel__handle" />
+                <h3 className="modal-panel__title">How private payments work</h3>
+                <div className="stealth-help-body">
+                  <div className="stealth-help-row">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--blue-2)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                    <p>The sender used your stealth meta-address to generate a unique one-time address that only you can detect. Nobody watching the blockchain can link it to you.</p>
+                  </div>
+                  <div className="stealth-help-row">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--blue-2)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    <p>Scanning checks recent blockchain activity and uses your private keys to find payments meant for you. Nothing is shared with any server during this check.</p>
+                  </div>
+                  <div className="stealth-help-row">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--blue-2)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>
+                    <p><strong>Claiming</strong> moves the funds from that one-time address into your main wallet. It is the final step to access what was sent to you privately.</p>
+                  </div>
+                </div>
+                <button className="btn btn--ghost" style={{ width: "100%", marginTop: "0.5rem" }} onClick={() => setShowStealthHelp(false)}>Got it</button>
+              </div>
+            </div>
+          )}
+
           <div className="stealth-scan-section">
             <span className="stealth-scan-section__title">Incoming private payments</span>
             <button className="btn btn--ghost" onClick={scan} disabled={scanning || cooldown > 0} style={{ width: "100%" }}>
@@ -511,6 +536,13 @@ function ReceiveScreen({ vault, onBack }: { vault: Vault; onBack: () => void }) 
                 : cooldown > 0 ? `Scan again in ${cooldown}s`
                 : "Scan for payments"}
             </button>
+
+            {payments && payments.length > 0 && (
+              <button className="stealth-help-btn" onClick={() => setShowStealthHelp(true)} aria-label="How does this work?">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                How does this work?
+              </button>
+            )}
 
             {scanErr && <p className="err">{scanErr}</p>}
 
@@ -524,31 +556,29 @@ function ReceiveScreen({ vault, onBack }: { vault: Vault; onBack: () => void }) 
                   const result = sweepResult[p.stealthAddress];
                   return (
                     <div key={p.stealthAddress} className="stealth-payment">
-                      <div className="stealth-payment__row">
-                        <div className="stealth-payment__info">
-                          {p.ethRaw > 0n && <span className="stealth-payment__eth">{p.ethBalance} ETH</span>}
-                          {p.tokens.map(t => (
-                            <span key={t.address} className="stealth-payment__eth">
-                              {parseFloat(t.balance).toFixed(t.decimals <= 6 ? 2 : 5).replace(/\.?0+$/, "")} {t.symbol}
-                            </span>
-                          ))}
-                          <span className="stealth-payment__addr">{shortAddress(p.stealthAddress)}</span>
-                        </div>
-                        {!result && (
-                          <button
-                            className="btn btn--primary stealth-payment__sweep"
-                            onClick={() => sweep(p)}
-                            disabled={sweeping === p.stealthAddress}
-                          >
-                            {sweeping === p.stealthAddress ? "Sweeping…" : "Sweep all"}
-                          </button>
-                        )}
+                      <div className="stealth-payment__assets">
+                        {p.ethRaw > 0n && <span className="stealth-payment__eth">{p.ethBalance} ETH</span>}
+                        {p.tokens.map(t => (
+                          <span key={t.address} className="stealth-payment__eth">
+                            {parseFloat(t.balance).toFixed(t.decimals <= 6 ? 2 : 5).replace(/\.?0+$/, "")} {t.symbol}
+                          </span>
+                        ))}
+                        <span className="stealth-payment__addr">{shortAddress(p.stealthAddress)}</span>
                       </div>
+                      {!result && (
+                        <button
+                          className="btn btn--primary stealth-payment__claim"
+                          onClick={() => sweep(p)}
+                          disabled={sweeping === p.stealthAddress}
+                        >
+                          {sweeping === p.stealthAddress ? "Claiming…" : "Claim"}
+                        </button>
+                      )}
                       {result?.ok && result.hashes && (
                         <div className="stealth-payment__txs">
                           {result.hashes.map((h, i) => (
                             <a key={h} className="stealth-payment__tx" href={`https://basescan.org/tx/${h}`} target="_blank" rel="noopener">
-                              Tx {i + 1} swept. View on Basescan ↗
+                              Tx {i + 1} claimed. View on Basescan ↗
                             </a>
                           ))}
                         </div>

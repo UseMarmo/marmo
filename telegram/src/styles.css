@@ -658,16 +658,34 @@ button, input, select, textarea { font-family: inherit; }
   border-radius: var(--radius-sm);
   padding: 0.85rem 1rem;
 }
-.stealth-payment__row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-.stealth-payment__info { display: flex; flex-direction: column; gap: 0.2rem; }
+.stealth-payment__assets { display: flex; flex-direction: column; gap: 0.2rem; margin-bottom: 0.75rem; }
 .stealth-payment__eth { font-size: 0.95rem; font-weight: 600; }
 .stealth-payment__addr { font-size: 0.72rem; color: var(--ink-muted); font-family: monospace; }
-.stealth-payment__sweep { padding: 0.35rem 0.9rem; font-size: 0.8rem; height: auto; flex-shrink: 0; }
+.stealth-payment__claim { width: 100%; font-size: 0.85rem; }
+
+.stealth-help-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: none;
+  border: none;
+  color: var(--ink-muted);
+  font-size: 0.75rem;
+  cursor: pointer;
+  padding: 0;
+  margin-top: -0.25rem;
+}
+.stealth-help-btn:hover { color: var(--blue-2); }
+
+.stealth-help-body { display: flex; flex-direction: column; gap: 0.9rem; margin-top: 0.25rem; }
+.stealth-help-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+.stealth-help-row svg { flex-shrink: 0; margin-top: 0.15rem; }
+.stealth-help-row p { font-size: 0.83rem; line-height: 1.55; color: var(--ink-muted); margin: 0; }
+.stealth-help-row p strong { color: var(--ink); }
 .stealth-payment__txs { display: flex; flex-direction: column; gap: 0.2rem; margin-top: 0.5rem; }
 .stealth-payment__tx {
   display: block;
