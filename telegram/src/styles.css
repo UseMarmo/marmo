@@ -75,6 +75,9 @@ button, input, select, textarea { font-family: inherit; }
   text-align: center;
   gap: 0;
 }
+.welcome__recover {
+  margin-top: 1.25rem;
+}
 
 .logo {
   width: 52px;

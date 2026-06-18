@@ -323,7 +323,7 @@ function WelcomeScreen({ onCreated, onRecover }: { onCreated: (v: Vault) => void
       <button className="btn btn--primary" onClick={create} disabled={loading}>
         {loading ? "Setting up…" : "Create wallet"}
       </button>
-      <button className="btn btn--ghost" onClick={onRecover} disabled={loading}>
+      <button className="btn btn--ghost welcome__recover" onClick={onRecover} disabled={loading}>
         Recover existing wallet
       </button>
       {err && <p className="err">{err}</p>}
@@ -355,28 +355,44 @@ function RecoverScreen({ onRecovered, onBack }: { onRecovered: (v: Vault) => voi
     }
   }
 
+  async function paste() {
+    const text = await navigator.clipboard.readText().catch(() => "");
+    if (text) setAddress(text.trim());
+  }
+
   return (
-    <div className="screen welcome">
+    <div className="screen send-screen">
       <button className="back" onClick={onBack}>← Back</button>
       <h2 className="title title--sm">Recover wallet</h2>
-      <p className="sub" style={{ fontSize: "0.83rem" }}>
-        Enter your wallet address and a code from your authenticator app.
-      </p>
+      <p className="totp-setup__hint">Enter your wallet address and open your authenticator app for the 6-digit code.</p>
 
-      <label className="field">
-        <span>Wallet address</span>
-        <input
-          type="text"
-          placeholder="0x…"
-          value={address}
-          onChange={e => setAddress(e.target.value)}
-          autoComplete="off"
-          spellCheck={false}
-        />
-      </label>
+      <div className="field">
+        <label>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+          Wallet address
+        </label>
+        <div className="ca-row">
+          <input
+            className="ca-input"
+            type="text"
+            placeholder="0x…"
+            value={address}
+            onChange={e => setAddress(e.target.value.trim())}
+            autoComplete="off"
+            spellCheck={false}
+          />
+          <button className="ca-paste-btn" onClick={paste}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
+            Paste
+          </button>
+        </div>
+      </div>
 
-      <label className="field">
-        <span>Authenticator code</span>
+      <div className="field">
+        <label>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg>
+          Authenticator code
+        </label>
         <input
           className="totp-setup__code-input"
           type="text"
@@ -387,7 +403,7 @@ function RecoverScreen({ onRecovered, onBack }: { onRecovered: (v: Vault) => voi
           value={code}
           onChange={e => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
         />
-      </label>
+      </div>
 
       {err && <p className="err">{err}</p>}
 
