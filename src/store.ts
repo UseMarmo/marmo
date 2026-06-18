@@ -14,6 +14,8 @@ export interface WalletRecord {
   shardCAddress: string;
   stealthMetaAddress?: string;
   encViewPriv?: string;
+  totpSecret?: string;
+  totpEnabled: boolean;
   createdAt: string;
 }
 
@@ -60,10 +62,21 @@ export async function putStealthMeta(address: string, stealthMetaAddress: string
      where address = ${address}`;
 }
 
+export async function putTotp(address: string, encSecret: string): Promise<void> {
+  await sql`
+    update marmo_wallets
+       set totp_secret = ${encSecret}, totp_enabled = false
+     where address = ${address}`;
+}
+
+export async function enableTotp(address: string): Promise<void> {
+  await sql`update marmo_wallets set totp_enabled = true where address = ${address}`;
+}
+
 export async function getWallet(address: string): Promise<WalletRecord | undefined> {
   const rows = await sql`
     select address, shard_id, api_key_hash, shard_a_address, shard_c_address,
-           stealth_meta_address, enc_view_priv, created_at
+           stealth_meta_address, enc_view_priv, totp_secret, totp_enabled, created_at
     from marmo_wallets where address = ${address}`;
   const row = rows[0];
   if (!row) return undefined;
@@ -75,6 +88,8 @@ export async function getWallet(address: string): Promise<WalletRecord | undefin
     shardCAddress: row.shard_c_address,
     stealthMetaAddress: row.stealth_meta_address ?? undefined,
     encViewPriv: row.enc_view_priv ?? undefined,
+    totpSecret: row.totp_secret ?? undefined,
+    totpEnabled: row.totp_enabled ?? false,
     createdAt: row.created_at,
   };
 }

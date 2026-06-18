@@ -5,7 +5,8 @@ import { generatePrivateKey, privateKeyToAddress, privateKeyToAccount } from "vi
 import { hexToBytes } from "viem";
 import { encryptSecret, decryptSecret, newApiKey, newId } from "./crypto.js";
 import { migrate } from "./db/migrate.js";
-import { pingStore, putShard, getShard, putWallet, getWallet, putStealthMeta, type WalletRecord } from "./store.js";
+import { pingStore, putShard, getShard, putWallet, getWallet, putStealthMeta, putTotp, enableTotp, type WalletRecord } from "./store.js";
+import { generateTotpSecret, base32Encode, base32Decode, verifyTotp, buildOtpAuthUri } from "./totp.js";
 import { computeStealthAddress, parseMetaAddress, checkAnnouncement } from "./stealth.js";
 import { getAnnouncements, getLatestBlock, NETWORK } from "./chain.js";
 import { quoteExactIn, buildSwapCalldata, listTokens } from "./swap.js";
@@ -423,6 +424,65 @@ app.get("/v1/wallets/:address/stealth/scan", async (c) => {
   } catch (e) {
     return c.json({ error: (e as Error).message }, 500);
   }
+});
+
+app.post("/v1/wallets/:address/totp/setup", async (c) => {
+  const address = c.req.param("address").toLowerCase();
+  const wallet = await getWallet(address);
+  if (!wallet) return c.json({ error: "wallet not found" }, 404);
+
+  const auth = c.req.header("authorization") ?? "";
+  const provided = auth.replace(/^Bearer\s+/i, "");
+  if (!provided || hashKey(provided) !== wallet.apiKeyHash) {
+    return c.json({ error: "unauthorized" }, 401);
+  }
+
+  const secret = generateTotpSecret();
+  const base32 = base32Encode(secret);
+  await putTotp(address, encryptSecret(base32, VAULT_KEY));
+
+  return c.json({ secret: base32, uri: buildOtpAuthUri(base32, address) });
+});
+
+app.post("/v1/wallets/:address/totp/confirm", async (c) => {
+  const address = c.req.param("address").toLowerCase();
+  const wallet = await getWallet(address);
+  if (!wallet) return c.json({ error: "wallet not found" }, 404);
+
+  const auth = c.req.header("authorization") ?? "";
+  const provided = auth.replace(/^Bearer\s+/i, "");
+  if (!provided || hashKey(provided) !== wallet.apiKeyHash) {
+    return c.json({ error: "unauthorized" }, 401);
+  }
+
+  if (!wallet.totpSecret) return c.json({ error: "totp not set up, call POST /totp/setup first" }, 400);
+
+  const body = await c.req.json().catch(() => null);
+  if (!body?.code || !/^\d{6}$/.test(body.code)) {
+    return c.json({ error: "code must be a 6-digit string" }, 400);
+  }
+
+  const secret = base32Decode(decryptSecret(wallet.totpSecret, VAULT_KEY));
+  if (!verifyTotp(secret, body.code)) {
+    return c.json({ error: "invalid code" }, 400);
+  }
+
+  await enableTotp(address);
+  return c.json({ ok: true });
+});
+
+app.get("/v1/wallets/:address/totp/status", async (c) => {
+  const address = c.req.param("address").toLowerCase();
+  const wallet = await getWallet(address);
+  if (!wallet) return c.json({ error: "wallet not found" }, 404);
+
+  const auth = c.req.header("authorization") ?? "";
+  const provided = auth.replace(/^Bearer\s+/i, "");
+  if (!provided || hashKey(provided) !== wallet.apiKeyHash) {
+    return c.json({ error: "unauthorized" }, 401);
+  }
+
+  return c.json({ enabled: wallet.totpEnabled });
 });
 
 Bun.serve({ port: PORT, fetch: app.fetch });

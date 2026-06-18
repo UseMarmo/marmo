@@ -188,3 +188,37 @@ export async function scanStealth(address: string, apiKey: string): Promise<Stea
   if (!res.ok) throw new Error(data.error ?? "Stealth scan failed");
   return data;
 }
+
+export interface TotpSetupResult {
+  secret: string;
+  uri: string;
+}
+
+export async function setupTotp(address: string, apiKey: string): Promise<TotpSetupResult> {
+  const res = await coreFetch(`/v1/wallets/${address}/totp/setup`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${apiKey}` },
+  });
+  const data = (await res.json().catch(() => ({}))) as TotpSetupResult & { error?: string };
+  if (!res.ok) throw new Error(data.error ?? "TOTP setup failed");
+  return data;
+}
+
+export async function confirmTotp(address: string, apiKey: string, code: string): Promise<void> {
+  const res = await coreFetch(`/v1/wallets/${address}/totp/confirm`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({ code }),
+  });
+  const data = (await res.json().catch(() => ({}))) as { error?: string };
+  if (!res.ok) throw new Error(data.error ?? "TOTP confirmation failed");
+}
+
+export async function getTotpStatus(address: string, apiKey: string): Promise<boolean> {
+  const res = await coreFetch(`/v1/wallets/${address}/totp/status`, {
+    headers: { authorization: `Bearer ${apiKey}` },
+  });
+  const data = (await res.json().catch(() => ({}))) as { enabled?: boolean; error?: string };
+  if (!res.ok) throw new Error(data.error ?? "Failed to get TOTP status");
+  return data.enabled ?? false;
+}

@@ -52,6 +52,7 @@ export interface Vault {
   credentialId: string;
   apiKey: string;
   shardBAddress?: string;
+  totpEnabled?: boolean;
 }
 
 export interface BalanceResult {
@@ -294,6 +295,19 @@ async function resolveAddress(
     functionName: "predictAddress",
     args: [[shardAAddress, shardBAddress, shardCAddress], 0n],
   }) as Promise<`0x${string}`>;
+}
+
+export async function initTotpSetup(vault: Vault): Promise<{ secret: string; uri: string }> {
+  const serverKey = privateKeyToAddress(vault.shardAPrivKey);
+  return core.setupTotp(serverKey, vault.apiKey);
+}
+
+export async function confirmTotpSetup(vault: Vault, code: string): Promise<Vault> {
+  const serverKey = privateKeyToAddress(vault.shardAPrivKey);
+  await core.confirmTotp(serverKey, vault.apiKey, code);
+  const updated = { ...vault, totpEnabled: true };
+  saveVault(updated);
+  return updated;
 }
 
 export async function createWallet(): Promise<Vault> {

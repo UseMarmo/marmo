@@ -16,6 +16,8 @@ import {
   registerStealth,
   scanStealthPayments,
   sweepStealthPayment,
+  initTotpSetup,
+  confirmTotpSetup,
   type Vault,
   type BalanceResult,
   type WalletToken,
@@ -23,7 +25,7 @@ import {
 } from "./wallet.js";
 import * as core from "./core.js";
 
-type Screen = "loading" | "welcome" | "dashboard" | "send" | "receive" | "swap";
+type Screen = "loading" | "welcome" | "dashboard" | "send" | "receive" | "swap" | "setup-totp";
 
 const SCRAMBLE = "0123456789";
 
@@ -82,6 +84,105 @@ const SwapIcon = () => (
     <path d="M17 8v12m0 0l4-4m-4 4l-4-4" />
   </svg>
 );
+
+function SetupTotpScreen({ vault, onDone, onBack }: { vault: Vault; onDone: (v: Vault) => void; onBack: () => void }) {
+  const [step, setStep] = useState<"qr" | "confirm">("qr");
+  const [totpData, setTotpData] = useState<{ secret: string; uri: string } | null>(null);
+  const [code, setCode] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    initTotpSetup(vault).then(setTotpData).catch(e => setErr(errMsg(e)));
+  }, []);
+
+  async function confirm() {
+    if (!/^\d{6}$/.test(code)) { setErr("Enter the 6-digit code from your app"); return; }
+    setLoading(true);
+    setErr("");
+    try {
+      const updated = await confirmTotpSetup(vault, code);
+      haptic("success");
+      onDone(updated);
+    } catch (e) {
+      haptic("error");
+      setErr(errMsg(e));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const qrUrl = totpData
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(totpData.uri)}&color=e9f0f8&bgcolor=141b24&margin=10&qzone=1`
+    : null;
+
+  return (
+    <div className="screen send-screen">
+      <button className="back" onClick={onBack}>← Back</button>
+      <h2 className="title title--sm">Set up recovery</h2>
+
+      {step === "qr" && (
+        <>
+          <p className="totp-setup__hint">Scan this QR code with Google Authenticator, Microsoft Authenticator, or Authy. This links your wallet to your authenticator app so you can recover access if you lose this device.</p>
+
+          {!totpData && !err && (
+            <div style={{ display: "flex", justifyContent: "center", padding: "2rem 0" }}>
+              <svg className="swap-fetching__spinner" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--blue-2)" strokeWidth="2" strokeLinecap="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+            </div>
+          )}
+
+          {qrUrl && (
+            <div className="totp-setup__qr-wrap">
+              <img src={qrUrl} width={200} height={200} className="totp-setup__qr" alt="Authenticator QR code" />
+            </div>
+          )}
+
+          {totpData && (
+            <div className="totp-setup__manual">
+              <span className="totp-setup__manual-label">Or enter manually</span>
+              <button className="totp-setup__secret" onClick={() => { navigator.clipboard.writeText(totpData.secret); haptic("success"); }}>
+                {totpData.secret}
+                <CopyIcon />
+              </button>
+            </div>
+          )}
+
+          {err && <p className="err">{err}</p>}
+
+          <button className="btn btn--primary" onClick={() => setStep("confirm")} disabled={!totpData}>
+            I scanned it
+          </button>
+          <button className="btn btn--ghost" onClick={onBack}>Skip for now</button>
+        </>
+      )}
+
+      {step === "confirm" && (
+        <>
+          <p className="totp-setup__hint">Open your authenticator app and enter the 6-digit code for Marmo to confirm the link.</p>
+
+          <input
+            className="totp-setup__code-input"
+            type="text"
+            inputMode="numeric"
+            pattern="\d{6}"
+            maxLength={6}
+            placeholder="000000"
+            value={code}
+            onChange={e => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+            autoFocus
+          />
+
+          {err && <p className="err">{err}</p>}
+
+          <button className="btn btn--primary" onClick={confirm} disabled={loading || code.length !== 6}>
+            {loading ? "Verifying…" : "Confirm"}
+          </button>
+          <button className="btn btn--ghost" onClick={() => { setStep("qr"); setCode(""); setErr(""); }}>← Back</button>
+        </>
+      )}
+    </div>
+  );
+}
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>("loading");
@@ -146,6 +247,7 @@ export default function App() {
         onReceive={() => navigate("receive")}
         onSwap={() => navigate("swap")}
         onRefresh={refreshBalance}
+        onSetupTotp={() => navigate("setup-totp")}
       />
     );
   }
@@ -160,6 +262,16 @@ export default function App() {
 
   if (screen === "swap" && vault) {
     return <SwapScreen vault={vault} onBack={() => navigate("dashboard")} />;
+  }
+
+  if (screen === "setup-totp" && vault) {
+    return (
+      <SetupTotpScreen
+        vault={vault}
+        onDone={(updatedVault) => { setVault(updatedVault); navigate("dashboard"); }}
+        onBack={() => navigate("dashboard")}
+      />
+    );
   }
 
   return null;
@@ -307,6 +419,7 @@ function DashboardScreen({
   onReceive,
   onSwap,
   onRefresh,
+  onSetupTotp,
 }: {
   vault: Vault;
   balance: BalanceResult | null;
@@ -314,8 +427,10 @@ function DashboardScreen({
   onReceive: () => void;
   onSwap: () => void;
   onRefresh: () => void;
+  onSetupTotp: () => void;
 }) {
   const [copied, setCopied] = useState(false);
+  const [bannerDismissed, setBannerDismissed] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [showBgPicker, setShowBgPicker] = useState(false);
   const scrambledUsd = useScramble(balance?.usdValue ?? null);
@@ -384,6 +499,24 @@ function DashboardScreen({
           Swap
         </button>
       </div>
+
+      {!vault.totpEnabled && !bannerDismissed && (
+        <div className="totp-banner">
+          <div className="totp-banner__icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </div>
+          <div className="totp-banner__body">
+            <span className="totp-banner__title">Secure your recovery</span>
+            <span className="totp-banner__sub">Set up an authenticator app so you can recover your wallet if you lose this device. Takes 30 seconds.</span>
+          </div>
+          <div className="totp-banner__actions">
+            <button className="btn btn--primary totp-banner__cta" onClick={onSetupTotp}>Set up</button>
+            <button className="totp-banner__dismiss" onClick={() => setBannerDismissed(true)} aria-label="Dismiss">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
