@@ -264,6 +264,23 @@ button, input, select, textarea { font-family: inherit; }
   min-height: 0;
 }
 
+.dash-panel-viewport {
+  overflow: hidden;
+}
+.dash-panel {
+  will-change: transform, opacity;
+}
+@keyframes dash-slide-right {
+  from { transform: translateX(28px); opacity: 0; }
+  to   { transform: translateX(0); opacity: 1; }
+}
+@keyframes dash-slide-left {
+  from { transform: translateX(-28px); opacity: 0; }
+  to   { transform: translateX(0); opacity: 1; }
+}
+.dash-panel--right { animation: dash-slide-right 0.26s cubic-bezier(0.32, 0.72, 0, 1); }
+.dash-panel--left  { animation: dash-slide-left 0.26s cubic-bezier(0.32, 0.72, 0, 1); }
+
 .dash-token-list,
 .dash-tx-list {
   display: flex;

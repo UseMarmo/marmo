@@ -26,8 +26,8 @@ import {
   type WalletToken,
   type StealthPayment,
   type TxRecord,
-  type TxCursor,
-  fetchTxPage,
+  type TxFetchState,
+  fetchTxBatch,
   TX_PAGE_SIZE,
 } from "./wallet.js";
 import * as core from "./core.js";
@@ -592,10 +592,12 @@ function DashboardScreen({
   const [tokens, setTokens] = useState<WalletToken[]>([]);
   const [ethPrice, setEthPrice] = useState(0);
   const [selectedToken, setSelectedToken] = useState<WalletToken | null>(null);
-  const [txList, setTxList] = useState<TxRecord[]>([]);
-  const [txNextCursor, setTxNextCursor] = useState<TxCursor>(null);
+  const [txBuffer, setTxBuffer] = useState<TxRecord[]>([]);
+  const [txShown, setTxShown] = useState(0);
+  const [txState, setTxState] = useState<TxFetchState | null>(null);
   const [txLoading, setTxLoading] = useState(false);
-  const [txHasMore, setTxHasMore] = useState(true);
+  const [txLoaded, setTxLoaded] = useState(false);
+  const [slideDir, setSlideDir] = useState<"left" | "right">("right");
   const scrambledUsd = useScramble(balance?.usdValue ?? null);
   const scrambledEth = useScramble(balance?.eth ?? null);
   const scrambledEthUsd = useScramble(balance?.ethUsdValue ?? null);
@@ -611,21 +613,43 @@ function DashboardScreen({
   }, [vault.address]);
 
   useEffect(() => {
-    if (dashTab !== "history" || txList.length > 0) return;
-    loadTxPage(null);
+    if (dashTab !== "history" || txLoaded) return;
+    loadMoreTx();
   }, [dashTab]);
 
-  async function loadTxPage(cursor: TxCursor = null) {
-    setTxLoading(true);
-    const page = await fetchTxPage(vault.address, cursor);
-    if (!cursor) {
-      setTxList(page.items);
-    } else {
-      setTxList(prev => [...prev, ...page.items]);
+  const txDone = txState ? txState.txDone && txState.tokenDone : false;
+
+  async function loadMoreTx() {
+    if (txBuffer.length - txShown >= TX_PAGE_SIZE) {
+      setTxShown(s => s + TX_PAGE_SIZE);
+      return;
     }
-    setTxNextCursor(page.nextCursor);
-    setTxHasMore(page.nextCursor !== null);
+    if (txDone && txLoaded) {
+      setTxShown(s => Math.min(s + TX_PAGE_SIZE, txBuffer.length));
+      return;
+    }
+    setTxLoading(true);
+    let buffer = txBuffer;
+    let state = txState;
+    while (buffer.length - txShown < TX_PAGE_SIZE) {
+      const batch = await fetchTxBatch(vault.address, state);
+      const seen = new Set(buffer.map(t => t.hash + t.tokenSymbol));
+      buffer = [...buffer, ...batch.items.filter(t => !seen.has(t.hash + t.tokenSymbol))]
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      state = batch.state;
+      if (state.txDone && state.tokenDone) break;
+    }
+    setTxBuffer(buffer);
+    setTxState(state);
+    setTxShown(s => Math.min(s + TX_PAGE_SIZE, buffer.length));
+    setTxLoaded(true);
     setTxLoading(false);
+  }
+
+  function switchTab(tab: "tokens" | "history") {
+    if (tab === dashTab) return;
+    setSlideDir(tab === "history" ? "right" : "left");
+    setDashTab(tab);
   }
 
   function selectBg(bg: string) {
@@ -718,88 +742,92 @@ function DashboardScreen({
 
       <div className="dash-tabs">
         <div className="receive-tabs" style={{ marginBottom: 0 }}>
-          <button className={`receive-tab${dashTab === "tokens" ? " active" : ""}`} onClick={() => setDashTab("tokens")}>
+          <button className={`receive-tab${dashTab === "tokens" ? " active" : ""}`} onClick={() => switchTab("tokens")}>
             <img src="/icons8-tokens-96.png" width={15} height={15} alt="" />
             Tokens
           </button>
-          <button className={`receive-tab${dashTab === "history" ? " active" : ""}`} onClick={() => setDashTab("history")}>
+          <button className={`receive-tab${dashTab === "history" ? " active" : ""}`} onClick={() => switchTab("history")}>
             <img src="/icons8-history-96.png" width={15} height={15} alt="" />
             History
           </button>
         </div>
 
-        {dashTab === "tokens" && (
-          <div className="dash-token-list">
-            {tokens.filter(t => parseFloat(t.balance) > 0).map(token => {
-              const price = getTokenPrice(token.symbol, ethPrice);
-              const usdVal = price > 0 ? (parseFloat(token.balance) * price) : null;
-              return (
-                <button key={token.address || "eth"} className="dash-token-item" onClick={() => setSelectedToken(token)}>
-                  <div className="dash-token-item__left">
-                    {token.logo ? <img src={token.logo} width={36} height={36} className="dash-token-item__logo" alt="" /> : <div className="dash-token-item__logo dash-token-item__logo--placeholder">{token.symbol[0]}</div>}
-                    <div className="dash-token-item__info">
-                      <span className="dash-token-item__name">{TOKEN_NAMES[token.symbol] ?? token.symbol}</span>
-                      <span className="dash-token-item__price">{price > 0 ? `$${price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "-"}</span>
-                    </div>
-                  </div>
-                  <div className="dash-token-item__right">
-                    <span className="dash-token-item__balance">{token.balance}</span>
-                    <span className="dash-token-item__usd">{usdVal != null ? `$${usdVal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : ""}</span>
-                  </div>
-                </button>
-              );
-            })}
-            {tokens.every(t => parseFloat(t.balance) === 0) && (
-              <p className="dash-empty">No tokens yet</p>
+        <div className="dash-panel-viewport">
+          <div key={dashTab} className={`dash-panel dash-panel--${slideDir}`}>
+            {dashTab === "tokens" && (
+              <div className="dash-token-list">
+                {tokens.filter(t => parseFloat(t.balance) > 0).map(token => {
+                  const price = getTokenPrice(token.symbol, ethPrice);
+                  const usdVal = price > 0 ? (parseFloat(token.balance) * price) : null;
+                  return (
+                    <button key={token.address || "eth"} className="dash-token-item" onClick={() => setSelectedToken(token)}>
+                      <div className="dash-token-item__left">
+                        {token.logo ? <img src={token.logo} width={36} height={36} className="dash-token-item__logo" alt="" /> : <div className="dash-token-item__logo dash-token-item__logo--placeholder">{token.symbol[0]}</div>}
+                        <div className="dash-token-item__info">
+                          <span className="dash-token-item__name">{TOKEN_NAMES[token.symbol] ?? token.symbol}</span>
+                          <span className="dash-token-item__price">{price > 0 ? `$${price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "-"}</span>
+                        </div>
+                      </div>
+                      <div className="dash-token-item__right">
+                        <span className="dash-token-item__balance">{token.balance}</span>
+                        <span className="dash-token-item__usd">{usdVal != null ? `$${usdVal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : ""}</span>
+                      </div>
+                    </button>
+                  );
+                })}
+                {tokens.every(t => parseFloat(t.balance) === 0) && (
+                  <p className="dash-empty">No tokens yet</p>
+                )}
+              </div>
             )}
-          </div>
-        )}
 
-        {dashTab === "history" && (
-          <div className="dash-tx-list">
-            {txList.map(tx => {
-              const out = tx.from.toLowerCase() === vault.address.toLowerCase();
-              const known = (tx.value !== "0" && tx.value !== "") || tx.isToken;
-              const amount = tx.isToken && tx.tokenAmount && tx.tokenSymbol
-                ? `${parseFloat(formatUnits(BigInt(tx.tokenAmount), parseInt(tx.tokenDecimal ?? "18"))).toLocaleString("en-US", { maximumFractionDigits: 6 })} ${tx.tokenSymbol}`
-                : tx.value && tx.value !== "0" ? `${parseFloat(formatEther(BigInt(tx.value))).toLocaleString("en-US", { maximumFractionDigits: 6 })} ETH` : null;
-              return (
-                <a key={tx.hash} className="dash-tx-item" href={`https://basescan.org/tx/${tx.hash}`} target="_blank" rel="noopener">
-                  <div className="dash-tx-item__icon">
-                    {!known
-                      ? <span className="dash-tx-item__unknown">?</span>
-                      : out
-                        ? <img src="/icons8-top-right-96.png" width={18} height={18} alt="out" />
-                        : <img src="/icons8-bottom-left-100.png" width={18} height={18} alt="in" />
-                    }
-                  </div>
-                  <div className="dash-tx-item__body">
-                    <span className="dash-tx-item__hash">{tx.hash.slice(0, 10)}…{tx.hash.slice(-6)}</span>
-                    {amount && <span className="dash-tx-item__amount">{out ? "-" : "+"}{amount}</span>}
-                  </div>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="dash-tx-item__ext"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-                </a>
-              );
-            })}
-            {txList.length === 0 && !txLoading && (
-              <p className="dash-empty">
-                No transactions yet.<br />
-                Not seeing a transaction?{" "}
-                <a className="dash-basescan-link" href={`https://basescan.org/address/${vault.address}`} target="_blank" rel="noopener">View full history on Basescan ↗</a>
-              </p>
-            )}
-            {txLoading && <p className="dash-empty">Loading…</p>}
-            {!txLoading && txHasMore && txList.length > 0 && (
-              <button className="btn btn--ghost dash-load-more" onClick={() => loadTxPage(txNextCursor)}>Load more</button>
-            )}
-            {!txLoading && txList.length > 0 && (
-              <p className="dash-basescan-note">
-                Not seeing a transaction?{" "}
-                <a className="dash-basescan-link" href={`https://basescan.org/address/${vault.address}`} target="_blank" rel="noopener">View full history on Basescan ↗</a>
-              </p>
+            {dashTab === "history" && (
+              <div className="dash-tx-list">
+                {txBuffer.slice(0, txShown).map(tx => {
+                  const out = tx.from.toLowerCase() === vault.address.toLowerCase();
+                  const known = (tx.value !== "0" && tx.value !== "") || tx.isToken;
+                  const amount = tx.isToken && tx.tokenAmount && tx.tokenSymbol
+                    ? `${parseFloat(formatUnits(BigInt(tx.tokenAmount), parseInt(tx.tokenDecimal ?? "18"))).toLocaleString("en-US", { maximumFractionDigits: 6 })} ${tx.tokenSymbol}`
+                    : tx.value && tx.value !== "0" ? `${parseFloat(formatEther(BigInt(tx.value))).toLocaleString("en-US", { maximumFractionDigits: 6 })} ETH` : null;
+                  return (
+                    <a key={tx.hash + (tx.tokenSymbol ?? "")} className="dash-tx-item" href={`https://basescan.org/tx/${tx.hash}`} target="_blank" rel="noopener">
+                      <div className="dash-tx-item__icon">
+                        {!known
+                          ? <span className="dash-tx-item__unknown">?</span>
+                          : out
+                            ? <img src="/icons8-top-right-96.png" width={18} height={18} alt="out" />
+                            : <img src="/icons8-bottom-left-100.png" width={18} height={18} alt="in" />
+                        }
+                      </div>
+                      <div className="dash-tx-item__body">
+                        <span className="dash-tx-item__hash">{tx.hash.slice(0, 10)}…{tx.hash.slice(-6)}</span>
+                        {amount && <span className="dash-tx-item__amount">{out ? "-" : "+"}{amount}</span>}
+                      </div>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="dash-tx-item__ext"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                    </a>
+                  );
+                })}
+                {txLoaded && txBuffer.length === 0 && !txLoading && (
+                  <p className="dash-empty">
+                    No transactions yet.<br />
+                    Not seeing a transaction?{" "}
+                    <a className="dash-basescan-link" href={`https://basescan.org/address/${vault.address}`} target="_blank" rel="noopener">View full history on Basescan ↗</a>
+                  </p>
+                )}
+                {txLoading && <p className="dash-empty">Loading…</p>}
+                {!txLoading && (txShown < txBuffer.length || !txDone) && txBuffer.length > 0 && (
+                  <button className="btn btn--ghost dash-load-more" onClick={loadMoreTx}>Load more</button>
+                )}
+                {!txLoading && txBuffer.length > 0 && (
+                  <p className="dash-basescan-note">
+                    Not seeing a transaction?{" "}
+                    <a className="dash-basescan-link" href={`https://basescan.org/address/${vault.address}`} target="_blank" rel="noopener">View full history on Basescan ↗</a>
+                  </p>
+                )}
+              </div>
             )}
           </div>
-        )}
+        </div>
       </div>
 
       {selectedToken && <TokenDrawer token={selectedToken} ethPrice={ethPrice} onClose={() => setSelectedToken(null)} />}

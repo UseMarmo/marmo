@@ -470,7 +470,7 @@ export async function fetchWalletTokens(address: string): Promise<WalletToken[]>
   const addr = address as `0x${string}`;
   const [ethRaw, tokensRes] = await Promise.all([
     publicClient.getBalance({ address: addr }),
-    fetch(`${BLOCKSCOUT}/addresses/${address}/tokens?type=ERC-20&limit=50`).then(r => r.json()).catch(() => ({ items: [] })),
+    fetch(`${BLOCKSCOUT}/addresses/${address}/tokens?type=ERC-20`).then(r => r.json()).catch(() => ({ items: [] })),
   ]);
 
   const tokens: WalletToken[] = [{
@@ -532,21 +532,40 @@ export interface TxRecord {
   isToken: boolean;
 }
 
-export type TxCursor = Record<string, string | number> | null;
+type Cursor = Record<string, string | number> | null;
 
-export interface TxPage {
-  items: TxRecord[];
-  nextCursor: TxCursor;
+export interface TxFetchState {
+  txCursor: Cursor;
+  tokenCursor: Cursor;
+  txDone: boolean;
+  tokenDone: boolean;
 }
 
-export async function fetchTxPage(address: string, cursor: TxCursor = null): Promise<TxPage> {
-  const params = new URLSearchParams({ limit: String(TX_PAGE_SIZE) });
-  if (cursor) Object.entries(cursor).forEach(([k, v]) => params.set(k, String(v)));
+export interface TxBatch {
+  items: TxRecord[];
+  state: TxFetchState;
+}
 
-  const [txRes, tokRes] = await Promise.all([
-    fetch(`${BLOCKSCOUT}/addresses/${address}/transactions?${params}`).then(r => r.json()).catch(() => ({ items: [], next_page_params: null })),
-    fetch(`${BLOCKSCOUT}/addresses/${address}/token-transfers?${params}&type=ERC-20`).then(r => r.json()).catch(() => ({ items: [], next_page_params: null })),
-  ]);
+const EMPTY_STATE: TxFetchState = { txCursor: null, tokenCursor: null, txDone: false, tokenDone: false };
+
+function cursorParams(base: Record<string, string>, cursor: Cursor): string {
+  const p = new URLSearchParams(base);
+  if (cursor) Object.entries(cursor).forEach(([k, v]) => p.set(k, String(v)));
+  return p.toString();
+}
+
+export async function fetchTxBatch(address: string, state: TxFetchState | null): Promise<TxBatch> {
+  const s = state ?? EMPTY_STATE;
+  const empty = { items: [], next_page_params: null };
+
+  const txReq = s.txDone
+    ? Promise.resolve(empty)
+    : fetch(`${BLOCKSCOUT}/addresses/${address}/transactions?${cursorParams({}, s.txCursor)}`).then(r => r.json()).catch(() => empty);
+  const tokReq = s.tokenDone
+    ? Promise.resolve(empty)
+    : fetch(`${BLOCKSCOUT}/addresses/${address}/token-transfers?${cursorParams({ type: "ERC-20" }, s.tokenCursor)}`).then(r => r.json()).catch(() => empty);
+
+  const [txRes, tokRes] = await Promise.all([txReq, tokReq]);
 
   const normal: TxRecord[] = (txRes.items ?? []).map((tx: Record<string, unknown>) => ({
     hash: tx.hash as string,
@@ -576,14 +595,18 @@ export async function fetchTxPage(address: string, cursor: TxCursor = null): Pro
     };
   });
 
-  const seen = new Set<string>();
   const merged = [...normal, ...token]
-    .filter(tx => { if (seen.has(tx.hash)) return false; seen.add(tx.hash); return true; })
-    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-    .slice(0, TX_PAGE_SIZE);
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
-  const nextCursor = txRes.next_page_params ?? tokRes.next_page_params ?? null;
-  return { items: merged, nextCursor };
+  return {
+    items: merged,
+    state: {
+      txCursor: txRes.next_page_params ?? null,
+      tokenCursor: tokRes.next_page_params ?? null,
+      txDone: s.txDone || !txRes.next_page_params,
+      tokenDone: s.tokenDone || !tokRes.next_page_params,
+    },
+  };
 }
 
 export async function fetchEthPrice(): Promise<number> {
