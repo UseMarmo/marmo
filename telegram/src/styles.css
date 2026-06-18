@@ -156,6 +156,7 @@ button, input, select, textarea { font-family: inherit; }
   scrollbar-width: none;
 }
 .dashboard::-webkit-scrollbar { display: none; }
+.dashboard > * { flex-shrink: 0; }
 
 .card {
   position: relative;
