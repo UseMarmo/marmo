@@ -204,14 +204,26 @@ export async function setupTotp(address: string, apiKey: string): Promise<TotpSe
   return data;
 }
 
-export async function confirmTotp(address: string, apiKey: string, code: string): Promise<void> {
+export async function confirmTotp(address: string, apiKey: string, code: string, vaultKeys?: string): Promise<void> {
   const res = await coreFetch(`/v1/wallets/${address}/totp/confirm`, {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({ code }),
+    body: JSON.stringify({ code, ...(vaultKeys ? { vaultKeys } : {}) }),
   });
   const data = (await res.json().catch(() => ({}))) as { error?: string };
   if (!res.ok) throw new Error(data.error ?? "TOTP confirmation failed");
+}
+
+export async function recoverWallet(address: string, code: string): Promise<string> {
+  const res = await coreFetch("/v1/recover", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ address, code }),
+  });
+  const data = (await res.json().catch(() => ({}))) as { vaultKeys?: string; error?: string };
+  if (!res.ok) throw new Error(data.error ?? "Recovery failed");
+  if (!data.vaultKeys) throw new Error("Server returned no vault data");
+  return data.vaultKeys;
 }
 
 export async function getTotpStatus(address: string, apiKey: string): Promise<boolean> {

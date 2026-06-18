@@ -304,10 +304,45 @@ export async function initTotpSetup(vault: Vault): Promise<{ secret: string; uri
 
 export async function confirmTotpSetup(vault: Vault, code: string): Promise<Vault> {
   const serverKey = privateKeyToAddress(vault.shardAPrivKey);
-  await core.confirmTotp(serverKey, vault.apiKey, code);
+  const vaultKeys = JSON.stringify({
+    shardAPrivKey: vault.shardAPrivKey,
+    shardCPrivKey: vault.shardCPrivKey,
+    spendPrivKey: vault.spendPrivKey,
+    viewPrivKey: vault.viewPrivKey,
+    apiKey: vault.apiKey,
+    address: vault.address,
+    shardBAddress: vault.shardBAddress,
+  });
+  await core.confirmTotp(serverKey, vault.apiKey, code, vaultKeys);
   const updated = { ...vault, totpEnabled: true };
   saveVault(updated);
   return updated;
+}
+
+export async function recoverFromTotp(address: string, code: string): Promise<Vault> {
+  const vaultKeysJson = await core.recoverWallet(address.toLowerCase(), code);
+  const keys = JSON.parse(vaultKeysJson) as {
+    shardAPrivKey: `0x${string}`;
+    shardCPrivKey: `0x${string}`;
+    spendPrivKey: `0x${string}`;
+    viewPrivKey: `0x${string}`;
+    apiKey: string;
+    address: string;
+    shardBAddress?: string;
+  };
+  const vault: Vault = {
+    address: keys.address,
+    shardAPrivKey: keys.shardAPrivKey,
+    shardCPrivKey: keys.shardCPrivKey,
+    spendPrivKey: keys.spendPrivKey,
+    viewPrivKey: keys.viewPrivKey,
+    credentialId: "",
+    apiKey: keys.apiKey,
+    shardBAddress: keys.shardBAddress,
+    totpEnabled: true,
+  };
+  saveVault(vault);
+  return vault;
 }
 
 export async function createWallet(): Promise<Vault> {

@@ -18,6 +18,7 @@ import {
   sweepStealthPayment,
   initTotpSetup,
   confirmTotpSetup,
+  recoverFromTotp,
   type Vault,
   type BalanceResult,
   type WalletToken,
@@ -25,7 +26,7 @@ import {
 } from "./wallet.js";
 import * as core from "./core.js";
 
-type Screen = "loading" | "welcome" | "dashboard" | "send" | "receive" | "swap" | "setup-totp";
+type Screen = "loading" | "welcome" | "dashboard" | "send" | "receive" | "swap" | "setup-totp" | "recover";
 
 const SCRAMBLE = "0123456789";
 
@@ -235,7 +236,21 @@ export default function App() {
   }
 
   if (screen === "welcome") {
-    return <WelcomeScreen onCreated={(v) => { setVault(v); navigate("dashboard"); }} />;
+    return (
+      <WelcomeScreen
+        onCreated={(v) => { setVault(v); navigate("dashboard"); }}
+        onRecover={() => navigate("recover")}
+      />
+    );
+  }
+
+  if (screen === "recover") {
+    return (
+      <RecoverScreen
+        onRecovered={(v) => { setVault(v); navigate("dashboard"); }}
+        onBack={() => navigate("welcome")}
+      />
+    );
   }
 
   if (screen === "dashboard" && vault) {
@@ -277,7 +292,7 @@ export default function App() {
   return null;
 }
 
-function WelcomeScreen({ onCreated }: { onCreated: (v: Vault) => void }) {
+function WelcomeScreen({ onCreated, onRecover }: { onCreated: (v: Vault) => void; onRecover: () => void }) {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
 
@@ -306,7 +321,77 @@ function WelcomeScreen({ onCreated }: { onCreated: (v: Vault) => void }) {
       <button className="btn btn--primary" onClick={create} disabled={loading}>
         {loading ? "Setting up…" : "Create wallet"}
       </button>
+      <button className="btn btn--ghost" onClick={onRecover} disabled={loading}>
+        Recover existing wallet
+      </button>
       {err && <p className="err">{err}</p>}
+    </div>
+  );
+}
+
+function RecoverScreen({ onRecovered, onBack }: { onRecovered: (v: Vault) => void; onBack: () => void }) {
+  const [address, setAddress] = useState("");
+  const [code, setCode] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
+
+  async function recover() {
+    const trimmed = address.trim();
+    if (!trimmed.startsWith("0x") || trimmed.length < 42) { setErr("Enter your wallet address (0x…)"); return; }
+    if (!/^\d{6}$/.test(code)) { setErr("Enter the 6-digit code from your authenticator app"); return; }
+    setLoading(true);
+    setErr("");
+    try {
+      const v = await recoverFromTotp(trimmed, code);
+      haptic("success");
+      onRecovered(v);
+    } catch (e) {
+      haptic("error");
+      setErr(errMsg(e));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="screen welcome">
+      <button className="back" onClick={onBack}>← Back</button>
+      <h2 className="title title--sm">Recover wallet</h2>
+      <p className="sub" style={{ fontSize: "0.83rem" }}>
+        Enter your wallet address and a code from your authenticator app.
+      </p>
+
+      <label className="field">
+        <span>Wallet address</span>
+        <input
+          type="text"
+          placeholder="0x…"
+          value={address}
+          onChange={e => setAddress(e.target.value)}
+          autoComplete="off"
+          spellCheck={false}
+        />
+      </label>
+
+      <label className="field">
+        <span>Authenticator code</span>
+        <input
+          className="totp-setup__code-input"
+          type="text"
+          inputMode="numeric"
+          pattern="\d{6}"
+          maxLength={6}
+          placeholder="000000"
+          value={code}
+          onChange={e => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+        />
+      </label>
+
+      {err && <p className="err">{err}</p>}
+
+      <button className="btn btn--primary" onClick={recover} disabled={loading || !address || code.length !== 6}>
+        {loading ? "Recovering…" : "Recover wallet"}
+      </button>
     </div>
   );
 }

@@ -5,7 +5,7 @@ import { generatePrivateKey, privateKeyToAddress, privateKeyToAccount } from "vi
 import { hexToBytes } from "viem";
 import { encryptSecret, decryptSecret, newApiKey, newId } from "./crypto.js";
 import { migrate } from "./db/migrate.js";
-import { pingStore, putShard, getShard, putWallet, getWallet, putStealthMeta, putTotp, enableTotp, type WalletRecord } from "./store.js";
+import { pingStore, putShard, getShard, putWallet, getWallet, putStealthMeta, putTotp, enableTotp, putVaultKeys, type WalletRecord } from "./store.js";
 import { generateTotpSecret, base32Encode, base32Decode, verifyTotp, buildOtpAuthUri } from "./totp.js";
 import { computeStealthAddress, parseMetaAddress, checkAnnouncement } from "./stealth.js";
 import { getAnnouncements, getLatestBlock, NETWORK } from "./chain.js";
@@ -468,6 +468,11 @@ app.post("/v1/wallets/:address/totp/confirm", async (c) => {
   }
 
   await enableTotp(address);
+
+  if (body.vaultKeys && typeof body.vaultKeys === "string") {
+    await putVaultKeys(address, encryptSecret(body.vaultKeys, VAULT_KEY));
+  }
+
   return c.json({ ok: true });
 });
 
@@ -483,6 +488,37 @@ app.get("/v1/wallets/:address/totp/status", async (c) => {
   }
 
   return c.json({ enabled: wallet.totpEnabled });
+});
+
+app.post("/v1/recover", async (c) => {
+  const body = await c.req.json().catch(() => null);
+  if (!body?.address || !body?.code) {
+    return c.json({ error: "address and code are required" }, 400);
+  }
+
+  const address = (body.address as string).toLowerCase();
+  const wallet = await getWallet(address);
+  if (!wallet) return c.json({ error: "wallet not found" }, 404);
+
+  if (!wallet.totpEnabled || !wallet.totpSecret) {
+    return c.json({ error: "totp not enabled for this wallet" }, 400);
+  }
+
+  if (!/^\d{6}$/.test(body.code)) {
+    return c.json({ error: "code must be a 6-digit string" }, 400);
+  }
+
+  const secret = base32Decode(decryptSecret(wallet.totpSecret, VAULT_KEY));
+  if (!verifyTotp(secret, body.code)) {
+    return c.json({ error: "invalid code" }, 401);
+  }
+
+  if (!wallet.encVaultKeys) {
+    return c.json({ error: "no vault backup found — set up recovery from your original device first" }, 404);
+  }
+
+  const vaultKeys = decryptSecret(wallet.encVaultKeys, VAULT_KEY);
+  return c.json({ vaultKeys });
 });
 
 Bun.serve({ port: PORT, fetch: app.fetch });

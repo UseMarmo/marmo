@@ -16,6 +16,7 @@ export interface WalletRecord {
   encViewPriv?: string;
   totpSecret?: string;
   totpEnabled: boolean;
+  encVaultKeys?: string;
   createdAt: string;
 }
 
@@ -73,10 +74,14 @@ export async function enableTotp(address: string): Promise<void> {
   await sql`update marmo_wallets set totp_enabled = true where address = ${address}`;
 }
 
+export async function putVaultKeys(address: string, encVaultKeys: string): Promise<void> {
+  await sql`update marmo_wallets set enc_vault_keys = ${encVaultKeys} where address = ${address}`;
+}
+
 export async function getWallet(address: string): Promise<WalletRecord | undefined> {
   const rows = await sql`
     select address, shard_id, api_key_hash, shard_a_address, shard_c_address,
-           stealth_meta_address, enc_view_priv, totp_secret, totp_enabled, created_at
+           stealth_meta_address, enc_view_priv, totp_secret, totp_enabled, enc_vault_keys, created_at
     from marmo_wallets where address = ${address}`;
   const row = rows[0];
   if (!row) return undefined;
@@ -90,6 +95,7 @@ export async function getWallet(address: string): Promise<WalletRecord | undefin
     encViewPriv: row.enc_view_priv ?? undefined,
     totpSecret: row.totp_secret ?? undefined,
     totpEnabled: row.totp_enabled ?? false,
+    encVaultKeys: row.enc_vault_keys ?? undefined,
     createdAt: row.created_at,
   };
 }
