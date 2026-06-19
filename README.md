@@ -147,7 +147,7 @@ This builds against your system webkit so the app renders correctly on modern Me
 
 ## Whitepaper
 
-[Read the full cryptographic specification](https://usemarmo.xyz/whitepaper)
+[Read the full paper](https://usemarmo.xyz/whitepaper)
 
 ---
 
