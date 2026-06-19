@@ -36,7 +36,7 @@ Marmo creates three secp256k1 key shards at wallet setup:
 |---|---|---|
 | A | Your device / USB drive | secp256k1 key, stored locally |
 | B | Marmo co-signer | secp256k1 key, AES-256-GCM encrypted at rest |
-| C | Recovery | Passkey / hardware key |
+| C | Recovery | Passkey / WebAuthn |
 
 The wallet is an ERC-4337 smart account on Base. Spending requires any two shards to produce a 130-byte combined ECDSA payload (`sigA || sigB`, 65 bytes each). The `MarmoAccount` contract validates this in `validateUserOp`. No single shard can produce a valid payload alone.
 
