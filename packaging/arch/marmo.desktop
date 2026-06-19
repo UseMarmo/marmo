@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=Marmo
+Comment=Private threshold wallet on Base
+Exec=marmo
+Icon=marmo
+Type=Application
+Categories=Finance;
