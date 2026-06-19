@@ -81,21 +81,21 @@ jobs:
           releaseBody: |
             ### Download
 
-            | Platform | File to download |
+            | Platform | File |
             |---|---|
-            | **macOS** Apple Silicon | the `.dmg` ending in `_aarch64.dmg` |
-            | **macOS** Intel | the `.dmg` ending in `_x64.dmg` |
-            | **Windows** | the `-setup.exe` file |
-            | **Linux** (all distros) | `Marmo.flatpak` |
-            | **Linux** Ubuntu / Debian | the `.deb` file |
-            | **Linux** AppImage | the `.AppImage` file |
+            | macOS Apple Silicon | `.dmg` ending in `_aarch64.dmg` |
+            | macOS Intel | `.dmg` ending in `_x64.dmg` |
+            | Windows | `-setup.exe` |
+            | Ubuntu / Debian | `.deb` |
+            | Arch Linux | See below |
 
-            After downloading `Marmo.flatpak` run:
+            **Arch Linux** - build from source so the app links against your system webkit:
             ```
-            flatpak remote-add --if-not-exists --user flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-            flatpak install --user Marmo.flatpak
-            flatpak run xyz.marmo.Desktop
+            git clone https://github.com/UseMarmo/marmo
+            cd marmo/packaging/arch && makepkg -si
             ```
+
+            Other Linux distros: use the `.deb` if on a Debian-based system, otherwise build from source following the Arch instructions above.
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
