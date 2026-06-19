@@ -101,9 +101,7 @@ jobs:
 
       - name: Install Flatpak tools
         if: matrix.platform == 'ubuntu-24.04'
-        run: |
-          sudo apt-get install -y flatpak flatpak-builder
-          sudo flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+        run: sudo apt-get install -y flatpak flatpak-builder
 
       - name: Prepare Flatpak sources
         if: matrix.platform == 'ubuntu-24.04'
@@ -111,12 +109,13 @@ jobs:
           cp desktop/src-tauri/target/release/marmo-desktop packaging/flatpak/marmo-desktop
           cp desktop/src-tauri/icons/128x128.png packaging/flatpak/icon.png
 
-      - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+      - name: Build Flatpak bundle
         if: matrix.platform == 'ubuntu-24.04'
-        with:
-          bundle: Marmo.flatpak
-          manifest-path: packaging/flatpak/xyz.marmo.Desktop.yml
-          cache-key: flatpak-builder-v1
+        run: |
+          flatpak --user remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak --user install -y flathub org.gnome.Platform/x86_64/48 org.gnome.Sdk/x86_64/48
+          flatpak-builder --user --repo=flatpak-repo --force-clean flatpak-build packaging/flatpak/xyz.marmo.Desktop.yml
+          flatpak build-bundle flatpak-repo Marmo.flatpak xyz.marmo.Desktop
 
       - name: Upload Flatpak to release
         if: matrix.platform == 'ubuntu-24.04'
