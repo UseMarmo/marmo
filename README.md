@@ -24,7 +24,7 @@
 
 ---
 
-One wallet, split in three. Your device holds one shard. Marmo holds one. Your passkey holds one. Any two can spend. No single one ever can.
+One wallet, split in three. Your device holds one shard. Marmo holds one. Your TOTP key holds one. Any two can spend. No single one ever can.
 
 ---
 
@@ -36,7 +36,7 @@ Marmo creates three secp256k1 key shards at wallet setup:
 |---|---|---|
 | A | Your device / USB drive | secp256k1 key, stored locally |
 | B | Marmo co-signer | secp256k1 key, AES-256-GCM encrypted at rest |
-| C | Recovery | Passkey / WebAuthn |
+| C | Recovery | TOTP (Passkey / WebAuthn coming soon) |
 
 The wallet is an ERC-4337 smart account on Base. Spending requires any two shards to produce a 130-byte combined ECDSA payload (`sigA || sigB`, 65 bytes each). The `MarmoAccount` contract validates this in `validateUserOp`. No single shard can produce a valid payload alone.
 
@@ -51,7 +51,7 @@ P(theft) = C(3,2) * p^2 * (1-p) + p^3
 
 At `p = 0.01` (1% per-shard attack probability), a single-key wallet has a 1% theft probability. Marmo reduces this to **0.03%**, roughly 33x harder to steal. The improvement grows as `p` shrinks: at `p = 0.001`, the ratio is 3000x.
 
-The three shards live in orthogonal security domains: local hardware, a remote server, and a biometric/cryptographic passkey. An attacker must simultaneously breach two independent systems.
+The three shards live in orthogonal security domains: local hardware, a remote server, and a TOTP authenticator. An attacker must simultaneously breach two independent systems.
 
 ---
 
