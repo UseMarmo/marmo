@@ -11,6 +11,7 @@ finish-args:
   - --share=network
   - --filesystem=home
   - --talk-name=org.freedesktop.secrets
+  - --env=WEBKIT_DISABLE_DMABUF_RENDERER=1
 modules:
   - name: marmo
     buildsystem: simple
