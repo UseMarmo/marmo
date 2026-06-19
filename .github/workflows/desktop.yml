@@ -99,6 +99,12 @@ jobs:
           args: ${{ matrix.args }}
           projectPath: desktop
 
+      - name: Install Flatpak tools
+        if: matrix.platform == 'ubuntu-24.04'
+        run: |
+          sudo apt-get install -y flatpak flatpak-builder
+          flatpak remote-add --if-not-exists --user flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+
       - name: Prepare Flatpak sources
         if: matrix.platform == 'ubuntu-24.04'
         run: |
