@@ -48,8 +48,8 @@ function el<T extends HTMLElement>(html: string): T {
 function toast(msg: string, kind: "ok" | "err" = "ok"): void {
   const t = el(`<div class="toast toast--${kind}" style="
     position:fixed;bottom:1.2rem;left:50%;transform:translateX(-50%);
-    background:${kind === "err" ? "rgba(255,80,80,0.15)" : "rgba(56,182,255,0.15)"};
-    border:1px solid ${kind === "err" ? "rgba(255,80,80,0.35)" : "rgba(56,182,255,0.35)"};
+    background:${kind === "err" ? "rgba(255,80,80,0.15)" : "rgba(252,141,6,0.15)"};
+    border:1px solid ${kind === "err" ? "rgba(255,80,80,0.35)" : "rgba(252,141,6,0.35)"};
     color:${kind === "err" ? "#fca5a5" : "var(--blue-2)"};
     padding:0.55rem 1.1rem;border-radius:999px;font-size:0.85rem;
     z-index:999;pointer-events:none;white-space:nowrap;

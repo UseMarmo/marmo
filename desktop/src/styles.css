@@ -10,9 +10,9 @@
   --ink-soft: #c2cdda;
   --ink-muted: #8a97a4;
   --muted: #8a97a4;
-  --blue: #38b6ff;
-  --blue-2: #6adaff;
-  --blue-deep: #0a86d8;
+  --blue: #fc8d06;
+  --blue-2: #ffa940;
+  --blue-deep: #d97706;
   --ok: #3ddc8a;
   --err: #ff6b6b;
   --warn-bg: rgba(255, 163, 60, 0.08);
@@ -75,7 +75,7 @@ button, input, select, textarea { font-family: inherit; }
   text-transform: uppercase;
   letter-spacing: 0.12em;
   color: var(--blue-2);
-  background: rgba(56, 182, 255, 0.12);
+  background: rgba(252, 141, 6, 0.12);
   padding: 0.25rem 0.6rem;
   border-radius: 999px;
 }
@@ -179,11 +179,11 @@ button, input, select, textarea { font-family: inherit; }
 
 .btn--primary {
   background: linear-gradient(180deg, var(--blue-2), var(--blue) 55%, var(--blue-deep));
-  color: #00253f;
-  box-shadow: 0 10px 30px -10px rgba(56, 182, 255, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  color: #1a0600;
+  box-shadow: 0 10px 30px -10px rgba(252, 141, 6, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 .btn--primary:not(:disabled):hover {
-  box-shadow: 0 16px 40px -12px rgba(56, 182, 255, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  box-shadow: 0 16px 40px -12px rgba(252, 141, 6, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.6);
 }
 
 .btn--ghost {
@@ -192,7 +192,7 @@ button, input, select, textarea { font-family: inherit; }
   backdrop-filter: blur(12px);
   color: var(--ink);
 }
-.btn--ghost:hover { border-color: var(--blue); background: rgba(56, 182, 255, 0.12); }
+.btn--ghost:hover { border-color: var(--blue); background: rgba(252, 141, 6, 0.12); }
 
 .btn img { vertical-align: middle; }
 
@@ -244,7 +244,7 @@ button, input, select, textarea { font-family: inherit; }
 .pill {
   font-family: var(--mono);
   font-size: 0.68rem;
-  background: rgba(56, 182, 255, 0.14);
+  background: rgba(252, 141, 6, 0.14);
   color: var(--blue-2);
   padding: 0.22rem 0.55rem;
   border-radius: 999px;
@@ -468,7 +468,7 @@ button, input, select, textarea { font-family: inherit; }
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.07) 0%, rgba(56, 182, 255, 0.06) 100%);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.07) 0%, rgba(252, 141, 6, 0.06) 100%);
   backdrop-filter: blur(18px) saturate(1.6);
   -webkit-backdrop-filter: blur(18px) saturate(1.6);
   border: 1px solid rgba(255, 255, 255, 0.13);
@@ -483,7 +483,7 @@ button, input, select, textarea { font-family: inherit; }
   content: "";
   position: absolute;
   inset: 0;
-  background: radial-gradient(ellipse 70% 50% at 50% 0%, rgba(56, 182, 255, 0.09) 0%, transparent 70%);
+  background: radial-gradient(ellipse 70% 50% at 50% 0%, rgba(252, 141, 6, 0.09) 0%, transparent 70%);
   pointer-events: none;
 }
 .totp-banner__top-row {
@@ -698,7 +698,7 @@ button, input, select, textarea { font-family: inherit; }
   white-space: nowrap;
 }
 .ca-paste-btn svg { display: block; flex-shrink: 0; }
-.ca-paste-btn:hover { background: rgba(56, 182, 255, 0.12); border-color: var(--blue); }
+.ca-paste-btn:hover { background: rgba(252, 141, 6, 0.12); border-color: var(--blue); }
 
 .ca-preview {
   display: flex;
@@ -955,8 +955,8 @@ button, input, select, textarea { font-family: inherit; }
   transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
 .token-tab--active {
-  background: rgba(56, 182, 255, 0.14);
-  border-color: rgba(56, 182, 255, 0.4);
+  background: rgba(252, 141, 6, 0.14);
+  border-color: rgba(252, 141, 6, 0.4);
   color: var(--blue-2);
 }
 
@@ -1262,7 +1262,7 @@ button, input, select, textarea { font-family: inherit; }
   transition: background 0.12s, border-color 0.12s;
 }
 .swap-slippage-opt.active {
-  background: rgba(56, 182, 255, 0.12);
+  background: rgba(252, 141, 6, 0.12);
   border-color: var(--blue);
   color: var(--blue-2);
 }
@@ -1372,8 +1372,8 @@ button, input, select, textarea { font-family: inherit; }
 .modal-section__icon {
   width: 34px; height: 34px;
   border-radius: 10px;
-  background: rgba(56, 182, 255, 0.1);
-  border: 1px solid rgba(56, 182, 255, 0.2);
+  background: rgba(252, 141, 6, 0.1);
+  border: 1px solid rgba(252, 141, 6, 0.2);
   color: var(--blue-2);
   display: grid; place-items: center;
   flex-shrink: 0; margin-top: 0.1rem;
